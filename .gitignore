@@ -1,0 +1,32 @@
+# 환경 변수 (API 키 포함 — 절대 커밋 금지)
+.env
+
+# Python 가상환경
+venv/
+.venv/
+env/
+
+# Python 캐시
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# 배포 빌드
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 로그
+*.log

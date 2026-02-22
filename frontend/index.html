@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chae-chitect</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0d0f14;
+      --surface:   #161b27;
+      --surface2:  #1e2535;
+      --border:    #2a3349;
+      --accent:    #6c63ff;
+      --accent2:   #a78bfa;
+      --green:     #34d399;
+      --yellow:    #fbbf24;
+      --review:    #f59e0b;
+      --muted:     #6b7280;
+      --text:      #e2e8f0;
+      --text2:     #94a3b8;
+      --radius:    12px;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Pretendard', 'Segoe UI', sans-serif;
+      height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 24px; border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+    }
+    .logo {
+      font-size: 20px; font-weight: 700; letter-spacing: -.5px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .badge {
+      font-size: 11px; background: var(--surface2);
+      border: 1px solid var(--border); color: var(--text2);
+      padding: 3px 10px; border-radius: 20px;
+    }
+
+    /* ── Stepper bar (full width) ── */
+    #pipeline-bar {
+      display: none; flex-direction: column;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+    }
+    #pipeline-bar.active { display: flex; }
+    #stepper { display: flex; align-items: center; padding: 11px 24px; }
+
+    .step-item { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; }
+    .step-circle {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 2px solid var(--border); background: var(--surface2);
+      color: var(--muted); font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: all .35s;
+    }
+    .step-info { min-width: 0; }
+    .step-name  { font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .35s; }
+    .step-status { font-size: 10px; color: var(--muted); margin-top: 1px; transition: color .35s; }
+    .step-connector { height: 2px; flex: 1; background: var(--border); margin: 0 8px; border-radius: 2px; transition: background .35s; min-width: 12px; }
+
+    .step-item.running .step-circle { border-color: var(--yellow); background: rgba(251,191,36,.12); color: var(--yellow); animation: pulse-y 1.5s ease-in-out infinite; }
+    .step-item.running .step-name   { color: var(--yellow); }
+    .step-item.running .step-status { color: var(--yellow); opacity: .8; }
+    .step-item.review .step-circle  { border-color: var(--review); background: rgba(245,158,11,.12); color: var(--review); animation: pulse-r 1.5s ease-in-out infinite; }
+    .step-item.review .step-name    { color: var(--review); }
+    .step-item.review .step-status  { color: var(--review); opacity: .8; }
+    .step-item.done .step-circle    { border-color: var(--green); background: rgba(52,211,153,.12); color: var(--green); }
+    .step-item.done .step-name      { color: var(--green); }
+    .step-item.done .step-status    { color: var(--green); opacity: .8; }
+    .step-connector.done            { background: var(--green); }
+
+    @keyframes pulse-y { 0%,100%{box-shadow:0 0 0 4px rgba(251,191,36,.12)} 50%{box-shadow:0 0 0 8px rgba(251,191,36,.04)} }
+    @keyframes pulse-r { 0%,100%{box-shadow:0 0 0 4px rgba(245,158,11,.15)} 50%{box-shadow:0 0 0 9px rgba(245,158,11,.04)} }
+
+    /* ── Review confirm banner ── */
+    #review-banner {
+      display: none; align-items: center; justify-content: space-between;
+      padding: 8px 24px 10px; background: rgba(245,158,11,.06);
+      border-top: 1px solid rgba(245,158,11,.2); gap: 12px;
+    }
+    #review-banner.active { display: flex; }
+    #review-guide { font-size: 12px; color: var(--text2); line-height: 1.4; }
+    #review-guide strong { color: var(--review); }
+    #confirm-btn {
+      padding: 6px 16px; background: var(--green); color: #0d0f14;
+      border: none; border-radius: 8px; font-size: 12.5px; font-weight: 700;
+      cursor: pointer; transition: all .2s; white-space: nowrap; flex-shrink: 0;
+    }
+    #confirm-btn:hover   { filter: brightness(1.1); transform: translateY(-1px); }
+    #confirm-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    #confirm-btn.pulse   { animation: cpulse .4s ease 0s 3; }
+    @keyframes cpulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06);box-shadow:0 0 0 6px rgba(52,211,153,.25)} }
+
+    /* ── Split layout ── */
+    main { display: flex; flex: 1; overflow: hidden; }
+
+    /* LEFT: result panel */
+    #result-panel {
+      width: 420px; min-width: 320px;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; flex-direction: column;
+      overflow: hidden; flex-shrink: 0;
+    }
+    #result-panel-header {
+      padding: 12px 18px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px; font-weight: 700; letter-spacing: .08em;
+      color: var(--muted); text-transform: uppercase; flex-shrink: 0;
+    }
+    #result-content {
+      flex: 1; overflow-y: auto; padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+    #result-content::-webkit-scrollbar { width: 5px; }
+    #result-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Welcome state for result panel */
+    #result-placeholder {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; flex: 1; gap: 10px;
+      color: var(--muted); text-align: center; padding: 24px;
+    }
+    #result-placeholder .icon { font-size: 32px; opacity: .4; }
+    #result-placeholder p { font-size: 13px; line-height: 1.6; max-width: 240px; }
+
+    /* Node blocks in result panel */
+    .node-section {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      transition: border-color .3s;
+    }
+    .node-section.running { border-color: var(--yellow); }
+    .node-section.review  { border-color: var(--review); box-shadow: 0 0 0 3px rgba(245,158,11,.08); }
+    .node-section.done    { border-color: var(--border); }
+
+    .node-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px;
+      background: var(--surface2);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      transition: color .3s, background .3s;
+    }
+    .node-section.running .node-section-header { color: var(--yellow); background: rgba(251,191,36,.06); border-color: rgba(251,191,36,.2); }
+    .node-section.review  .node-section-header { color: var(--review);  background: rgba(245,158,11,.06); border-color: rgba(245,158,11,.2); }
+    .node-section.done    .node-section-header { color: var(--green);   }
+
+    .node-section-body { padding: 12px 14px; }
+    .node-section-body:empty { display: none; }
+
+    /* Streaming raw text */
+    .stream-text {
+      font-size: 12.5px; color: var(--muted); line-height: 1.6;
+      white-space: pre-wrap; word-break: break-word;
+    }
+
+    /* Feature / Tech items */
+    .feature-item, .tech-item {
+      padding: 8px 11px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 8px;
+      margin-bottom: 6px; font-size: 12.5px; line-height: 1.5; color: var(--text);
+    }
+    .feature-item:last-child, .tech-item:last-child { margin-bottom: 0; }
+    .feature-id {
+      display: inline-block; background: var(--accent);
+      color: #fff; font-size: 9.5px; font-weight: 700;
+      padding: 1px 6px; border-radius: 4px; margin-right: 6px;
+    }
+    .feature-name { font-weight: 600; color: var(--text); }
+    .feature-desc { color: var(--text2); font-size: 12px; margin-top: 3px; }
+    .tech-num {
+      display: inline-block; width: 18px; height: 18px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 50%; text-align: center; line-height: 16px;
+      font-size: 10px; font-weight: 700; margin-right: 7px; color: var(--accent2);
+    }
+    .obsidian-wrap { position: relative; }
+    .obsidian-copy-btn {
+      position: absolute; top: 8px; right: 8px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text2); border-radius: 6px;
+      padding: 3px 10px; font-size: 10.5px; cursor: pointer;
+      transition: all .2s; z-index: 1;
+    }
+    .obsidian-copy-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    .obsidian-copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+    .obsidian-block {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 14px;
+      font-family: var(--font-mono); font-size: 11.5px; color: var(--text2);
+      white-space: pre-wrap; word-break: break-word;
+      max-height: 260px; overflow-y: auto; line-height: 1.7;
+      user-select: text;
+    }
+    .obsidian-block::-webkit-scrollbar { width: 4px; }
+    .obsidian-block::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* RIGHT: chat panel */
+    #chat-panel {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    #messages {
+      flex: 1; overflow-y: auto; padding: 20px 22px;
+      display: flex; flex-direction: column; gap: 16px;
+      scroll-behavior: smooth;
+    }
+    #messages::-webkit-scrollbar { width: 5px; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Welcome */
+    .welcome {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 10px; flex: 1;
+      color: var(--muted); text-align: center; padding: 32px;
+    }
+    .welcome h2 { font-size: 22px; color: var(--text); font-weight: 700; }
+    .welcome p  { font-size: 14px; max-width: 320px; line-height: 1.6; }
+    .examples { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 6px; }
+    .example-btn {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text2); padding: 7px 14px; border-radius: 20px;
+      cursor: pointer; font-size: 12.5px; transition: all .2s;
+    }
+    .example-btn:hover { border-color: var(--accent); color: var(--accent2); }
+
+    /* Bubbles */
+    .msg { display: flex; flex-direction: column; gap: 4px; }
+    .msg.user      { align-self: flex-end;   align-items: flex-end;   max-width: 85%; }
+    .msg.assistant { align-self: flex-start; align-items: flex-start; max-width: 95%; }
+    .msg.review-msg { align-self: flex-start; align-items: flex-start; max-width: 95%; }
+
+    .bubble {
+      padding: 10px 15px; border-radius: var(--radius);
+      line-height: 1.65; font-size: 13.5px;
+    }
+    .msg.user .bubble       { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+    .msg.assistant .bubble  { background: var(--surface2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .msg.review-msg .bubble { background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.2); border-bottom-left-radius: 4px; }
+
+    /* Markdown */
+    .bubble p  { margin-bottom: 7px; }
+    .bubble p:last-child { margin-bottom: 0; }
+    .bubble ul, .bubble ol { padding-left: 18px; margin-bottom: 7px; }
+    .bubble li { margin-bottom: 3px; }
+    .bubble strong { color: var(--text); font-weight: 700; }
+    .bubble code { background: rgba(255,255,255,.08); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-family: var(--font-mono); font-size: 12px; color: var(--accent2); }
+    .bubble h1,.bubble h2,.bubble h3 { color: var(--text); font-weight: 700; margin-bottom: 5px; margin-top: 8px; }
+    .bubble h2 { font-size: 14px; }
+    .bubble h3 { font-size: 13px; }
+
+    /* System notice */
+    .system-notice {
+      align-self: center; background: rgba(245,158,11,.08);
+      border: 1px solid rgba(245,158,11,.2); border-radius: 20px;
+      padding: 5px 14px; font-size: 11.5px; color: var(--review);
+    }
+    .system-notice.retry {
+      background: rgba(248,113,113,.1);
+      border-color: rgba(248,113,113,.3);
+      color: #f87171;
+    }
+
+    /* Cursor */
+    .cursor {
+      display: inline-block; width: 7px; height: 13px;
+      background: var(--yellow); vertical-align: middle;
+      margin-left: 2px; animation: blink .8s step-end infinite; border-radius: 1px;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── LangGraph panel (RIGHT) ── */
+    #lg-panel {
+      width: 270px; min-width: 220px;
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; flex-direction: column;
+      overflow: hidden; flex-shrink: 0;
+    }
+    #lg-panel-header {
+      padding: 12px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+      flex-shrink: 0;
+    }
+    #lg-panel-header .lg-title {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    #lg-panel-header .lg-badge {
+      font-size: 10px; padding: 2px 7px; border-radius: 10px;
+      background: rgba(108,99,255,.15); border: 1px solid rgba(108,99,255,.3);
+      color: var(--accent2); font-family: var(--font-mono);
+    }
+    #lg-scroll {
+      flex: 1; overflow-y: auto; padding: 14px 14px 20px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    #lg-scroll::-webkit-scrollbar { width: 4px; }
+    #lg-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ─ Graph section ─ */
+    .lg-section-title {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* Graph flow */
+    .lg-graph { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+    .lg-terminal {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 2px solid var(--border); background: var(--surface2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 8px; font-weight: 700; color: var(--muted); letter-spacing: .04em;
+    }
+    .lg-terminal.active   { border-color: var(--accent2); color: var(--accent2); background: rgba(167,139,250,.1); }
+    .lg-terminal.done     { border-color: var(--green);   color: var(--green);   background: rgba(52,211,153,.08); }
+
+    .lg-edge {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 2px 0;
+    }
+    .lg-edge-line {
+      width: 2px; height: 14px; background: var(--border);
+      border-radius: 1px; transition: background .35s;
+    }
+    .lg-edge-line.done { background: var(--green); }
+    .lg-edge-arrow {
+      width: 0; height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 6px solid var(--border);
+      transition: border-top-color .35s;
+    }
+    .lg-edge-arrow.done { border-top-color: var(--green); }
+
+    .lg-interrupt-badge {
+      font-size: 9px; color: var(--review);
+      background: rgba(245,158,11,.1);
+      border: 1px solid rgba(245,158,11,.25);
+      border-radius: 10px; padding: 1px 7px;
+      font-family: var(--font-mono);
+      margin: 2px 0;
+      opacity: 1; transition: opacity .3s;
+    }
+    .lg-interrupt-badge.triggered {
+      background: rgba(245,158,11,.22);
+      border-color: rgba(245,158,11,.6);
+      animation: interrupt-flash .5s ease;
+    }
+    @keyframes interrupt-flash {
+      0%   { box-shadow: 0 0 0 0 rgba(245,158,11,.5); }
+      70%  { box-shadow: 0 0 0 6px rgba(245,158,11,0); }
+      100% { box-shadow: none; }
+    }
+
+    /* Conditional edge badge */
+    .lg-cond-badge {
+      font-size: 9px; color: var(--accent2);
+      background: rgba(108,99,255,.1);
+      border: 1px solid rgba(108,99,255,.25);
+      border-radius: 10px; padding: 1px 7px;
+      font-family: var(--font-mono); margin: 2px 0;
+    }
+    .lg-cond-badge.retrying {
+      color: #f87171; background: rgba(248,113,113,.12);
+      border-color: rgba(248,113,113,.4);
+      animation: retry-flash .6s ease 0s 2;
+    }
+    @keyframes retry-flash {
+      0%,100% { box-shadow: none; }
+      50% { box-shadow: 0 0 0 4px rgba(248,113,113,.2); }
+    }
+    .lg-node-retry-badge {
+      font-size: 9px; font-family: var(--font-mono);
+      background: rgba(248,113,113,.12);
+      border: 1px solid rgba(248,113,113,.3);
+      color: #f87171; border-radius: 8px;
+      padding: 1px 6px; margin-left: 4px;
+    }
+
+    .lg-node-box {
+      width: 100%; border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: var(--surface2);
+      overflow: hidden; transition: border-color .3s, box-shadow .3s;
+      cursor: default;
+    }
+    .lg-node-box.running {
+      border-color: var(--yellow);
+      box-shadow: 0 0 0 3px rgba(251,191,36,.1);
+      animation: node-pulse-y 1.5s ease-in-out infinite;
+    }
+    .lg-node-box.review {
+      border-color: var(--review);
+      box-shadow: 0 0 0 3px rgba(245,158,11,.12);
+      animation: node-pulse-r 1.5s ease-in-out infinite;
+    }
+    .lg-node-box.done   { border-color: rgba(52,211,153,.4); }
+
+    @keyframes node-pulse-y { 0%,100%{box-shadow:0 0 0 3px rgba(251,191,36,.1)} 50%{box-shadow:0 0 0 6px rgba(251,191,36,.04)} }
+    @keyframes node-pulse-r { 0%,100%{box-shadow:0 0 0 3px rgba(245,158,11,.12)} 50%{box-shadow:0 0 0 7px rgba(245,158,11,.04)} }
+
+    .lg-node-top {
+      display: flex; align-items: center; gap: 7px;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      transition: background .3s;
+    }
+    .lg-node-box.running .lg-node-top { background: rgba(251,191,36,.06); border-color: rgba(251,191,36,.2); }
+    .lg-node-box.review  .lg-node-top { background: rgba(245,158,11,.06); border-color: rgba(245,158,11,.2); }
+    .lg-node-box.done    .lg-node-top { background: rgba(52,211,153,.04); }
+
+    .lg-node-icon { font-size: 13px; }
+    .lg-node-name { font-size: 10.5px; font-weight: 700; color: var(--muted); flex: 1; transition: color .3s; }
+    .lg-node-box.running .lg-node-name { color: var(--yellow); }
+    .lg-node-box.review  .lg-node-name { color: var(--review); }
+    .lg-node-box.done    .lg-node-name { color: var(--green); }
+    .lg-node-status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--border); transition: background .3s, box-shadow .3s;
+    }
+    .lg-node-box.running .lg-node-status-dot { background: var(--yellow); box-shadow: 0 0 0 2px rgba(251,191,36,.3); }
+    .lg-node-box.review  .lg-node-status-dot { background: var(--review);  box-shadow: 0 0 0 2px rgba(245,158,11,.3); }
+    .lg-node-box.done    .lg-node-status-dot { background: var(--green); }
+
+    .lg-node-meta {
+      padding: 5px 10px 6px;
+      font-size: 9.5px; color: var(--muted);
+      font-family: var(--font-mono); line-height: 1.5;
+      min-height: 26px;
+    }
+    .lg-node-meta span { color: var(--text2); }
+
+    /* ─ State inspector ─ */
+    .lg-state-table { width: 100%; border-collapse: collapse; }
+    .lg-state-table tr td {
+      padding: 4px 0; font-size: 10.5px; vertical-align: top;
+    }
+    .lg-state-table tr td:first-child {
+      color: var(--muted); font-family: var(--font-mono); width: 50%; padding-right: 8px;
+    }
+    .lg-state-table tr td:last-child { color: var(--text2); word-break: break-all; }
+    .lg-state-val { color: var(--accent2) !important; }
+
+    /* ─ Event log ─ */
+    .lg-log {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .lg-log-entry {
+      display: flex; gap: 6px; align-items: flex-start;
+      font-size: 10px; line-height: 1.4;
+      padding: 4px 8px; border-radius: 5px;
+      background: var(--surface2); border: 1px solid var(--border);
+      animation: logIn .2s ease;
+    }
+    @keyframes logIn { from { opacity:0; transform:translateX(6px); } to { opacity:1; } }
+    .lg-log-type {
+      font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+      padding: 1px 5px; border-radius: 3px; flex-shrink: 0; margin-top: 1px;
+    }
+    .lg-log-type.start       { background: rgba(108,99,255,.2); color: var(--accent2); }
+    .lg-log-type.node_start  { background: rgba(251,191,36,.15); color: var(--yellow); }
+    .lg-log-type.node_done   { background: rgba(52,211,153,.15); color: var(--green); }
+    .lg-log-type.interrupt   { background: rgba(245,158,11,.18); color: var(--review); }
+    .lg-log-type.review      { background: rgba(245,158,11,.12); color: var(--review); }
+    .lg-log-type.resume      { background: rgba(52,211,153,.12); color: var(--green); }
+    .lg-log-type.done        { background: rgba(108,99,255,.15); color: var(--accent2); }
+    .lg-log-type.retry       { background: rgba(248,113,113,.15); color: #f87171; }
+
+    /* ── Tooltip ── */
+    .tip {
+      cursor: help;
+      border-bottom: 1px dashed rgba(167,139,250,.45);
+      transition: border-color .15s;
+    }
+    .tip:hover { border-bottom-color: var(--accent2); }
+
+    #global-tip {
+      position: fixed; z-index: 99999;
+      width: 224px;
+      background: linear-gradient(145deg, #1a1f2e, #141824);
+      border: 1px solid rgba(108,99,255,.35);
+      border-radius: 10px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.65), 0 0 0 1px rgba(108,99,255,.12) inset;
+      pointer-events: none;
+      font-family: 'Pretendard', 'Segoe UI', sans-serif;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity .15s ease, transform .15s ease;
+      overflow: hidden;
+    }
+    #global-tip.visible {
+      opacity: 1; transform: translateY(0);
+    }
+    #global-tip .tip-title {
+      display: block;
+      padding: 8px 12px 6px;
+      font-size: 11px; font-weight: 700; letter-spacing: .04em;
+      color: var(--accent2);
+      border-bottom: 1px solid rgba(108,99,255,.2);
+      font-family: var(--font-mono);
+    }
+    #global-tip .tip-body {
+      display: block;
+      padding: 7px 12px 9px;
+      font-size: 11px; line-height: 1.65;
+      color: #b0bdd0;
+    }
+    /* 화살표 */
+    #global-tip { --arrow-left: 50%; }
+    #global-tip::before {
+      content: '';
+      position: absolute;
+      width: 8px; height: 8px;
+      background: #1a1f2e;
+      border: 1px solid rgba(108,99,255,.35);
+      left: var(--arrow-left); margin-left: -4px;
+    }
+    #global-tip.arrow-up::before   {
+      bottom: -5px; top: auto;
+      border-right: none; border-bottom: none;
+      transform: rotate(225deg);
+    }
+    #global-tip.arrow-down::before {
+      top: -5px; bottom: auto;
+      border-left: none; border-top: none;
+      transform: rotate(225deg);
+    }
+    .lg-log-msg { color: var(--text2); }
+
+    /* ── Input area ── */
+    #input-area {
+      padding: 14px 22px 18px; border-top: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0; transition: background .3s;
+    }
+    #input-area.review-mode { background: rgba(245,158,11,.04); border-top-color: rgba(245,158,11,.25); }
+    #input-wrap {
+      display: flex; align-items: flex-end; gap: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 9px 13px; transition: border-color .2s;
+    }
+    #input-wrap:focus-within { border-color: var(--accent); }
+    #input-area.review-mode #input-wrap:focus-within { border-color: var(--review); }
+    #user-input {
+      flex: 1; background: none; border: none; outline: none;
+      color: var(--text); font-size: 14px; resize: none;
+      max-height: 110px; min-height: 22px; line-height: 1.5; font-family: inherit;
+    }
+    #user-input::placeholder { color: var(--muted); }
+    #send-btn {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--accent); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .2s; flex-shrink: 0;
+    }
+    #input-area.review-mode #send-btn { background: var(--review); }
+    #send-btn:hover   { filter: brightness(1.15); }
+    #send-btn:active  { transform: scale(.95); }
+    #send-btn:disabled { background: var(--border); cursor: not-allowed; }
+    #send-btn svg { width: 15px; height: 15px; fill: #fff; }
+    .hint { font-size: 11px; color: var(--muted); margin-top: 7px; text-align: center; }
+    #input-area.review-mode .hint { color: var(--review); opacity: .7; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="logo">🏛 Chae-chitect</span>
+  <span class="badge">LangGraph · GPT-4o</span>
+</header>
+
+<!-- Stepper + review banner: full width -->
+<div id="pipeline-bar">
+  <div id="stepper"></div>
+  <div id="review-banner">
+    <div id="review-guide"></div>
+    <button id="confirm-btn" onclick="confirmAndContinue()">✅ 확정하고 다음 단계로</button>
+  </div>
+</div>
+
+<main>
+  <!-- LEFT: pipeline result panel -->
+  <div id="result-panel">
+    <div id="result-panel-header">Pipeline Output</div>
+    <div id="result-content">
+      <div id="result-placeholder">
+        <div class="icon">🏛</div>
+        <p>아이디어를 입력하면 여기에 분석 결과가 실시간으로 표시됩니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: chat panel -->
+  <div id="chat-panel">
+    <div id="messages">
+      <div class="welcome" id="welcome">
+        <h2>아이디어를 기술 스펙으로</h2>
+        <p>플러그인이나 제품 아이디어를 입력하세요.</p>
+        <div class="examples">
+          <button class="example-btn" onclick="useExample(this)">브라우저 대화 요약 확장 프로그램</button>
+          <button class="example-btn" onclick="useExample(this)">유튜브 영상 북마크 타임스탬프 앱</button>
+          <button class="example-btn" onclick="useExample(this)">GitHub PR 코드 리뷰 자동화 봇</button>
+          <button class="example-btn" onclick="useExample(this)">Obsidian AI 태그 자동 생성 플러그인</button>
+        </div>
+      </div>
+    </div>
+    <div id="input-area">
+      <div id="input-wrap">
+        <textarea id="user-input" rows="1" placeholder="플러그인 아이디어를 입력하세요..."></textarea>
+        <button id="send-btn" onclick="sendMessage()">
+          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+      </div>
+      <p class="hint" id="hint-text">Enter로 전송 · Shift+Enter로 줄바꿈</p>
+    </div>
+  </div>
+
+  <!-- RIGHT: LangGraph visualization panel -->
+  <div id="lg-panel">
+    <div id="lg-panel-header">
+      <span class="lg-title tip" data-tip="LangGraph&#10;LangChain 팀이 만든 상태 기반 에이전트 프레임워크. 노드(처리 단계)와 엣지(흐름)로 파이프라인을 그래프로 표현합니다.">LangGraph</span>
+      <span class="lg-badge tip" data-tip="StateGraph&#10;노드들이 공유하는 State를 중심으로 그래프를 구성하는 LangGraph의 핵심 클래스. 각 노드는 State를 읽고 업데이트합니다.">StateGraph</span>
+    </div>
+    <div id="lg-scroll">
+
+      <!-- Graph flow -->
+      <div>
+        <div class="lg-section-title tip tip-right" data-tip="Graph&#10;노드(Node)와 엣지(Edge)로 이루어진 파이프라인 흐름도. S(Start)에서 E(End)까지 각 단계가 순서대로 실행됩니다.">Graph</div>
+        <div class="lg-graph" id="lg-graph">
+
+          <div class="lg-terminal active" id="lg-start" title="START">S</div>
+
+          <div class="lg-edge">
+            <div class="lg-edge-line" id="edge-start-decomposer"></div>
+            <div class="lg-edge-arrow" id="arrow-start-decomposer"></div>
+          </div>
+
+          <div class="lg-node-box" id="lgn-decomposer">
+            <div class="lg-node-top">
+              <span class="lg-node-icon">🔍</span>
+              <span class="lg-node-name tip" data-tip="Node — decomposer&#10;아이디어를 원자적 피처로 분해하는 노드. State를 입력받아 LLM을 호출하고 결과를 feature_breakdown에 저장합니다.">decomposer</span>
+              <span class="lg-node-status-dot"></span>
+            </div>
+            <div class="lg-node-meta" id="lgn-meta-decomposer"><span class="tip" data-tip="feature_breakdown&#10;이 노드가 State에 기록하는 필드. 아이디어를 분해한 피처 목록(list[dict])을 저장합니다.">feature_breakdown</span>: <span>[]</span></div>
+          </div>
+
+          <div class="lg-edge">
+            <div class="lg-edge-line" id="edge-decomposer-tech_matcher"></div>
+            <div class="lg-cond-badge tip" id="cond-decomposer" data-tip="Conditional Edge&#10;조건부 엣지. 노드 실행 결과를 평가해 품질 기준을 충족하면 다음 노드로, 아니면 현재 노드를 재시도(루프)합니다.">↺ conditional_edge</div>
+            <div class="lg-interrupt-badge tip" id="int-decomposer" data-tip="interrupt_after&#10;이 노드 실행 후 그래프를 자동으로 일시 정지합니다. 사람이 결과를 검토·수정하고 재개(resume)할 때까지 State가 보존됩니다.">⏸ interrupt_after</div>
+            <div class="lg-edge-arrow" id="arrow-decomposer-tech_matcher"></div>
+          </div>
+
+          <div class="lg-node-box" id="lgn-tech_matcher">
+            <div class="lg-node-top">
+              <span class="lg-node-icon">⚙️</span>
+              <span class="lg-node-name tip" data-tip="Node — tech_matcher&#10;각 피처에 최적의 기술 스택을 매핑하는 노드. feature_breakdown을 읽고 LLM을 호출해 tech_requirements에 저장합니다.">tech_matcher</span>
+              <span class="lg-node-status-dot"></span>
+            </div>
+            <div class="lg-node-meta" id="lgn-meta-tech_matcher"><span class="tip" data-tip="tech_requirements&#10;이 노드가 State에 기록하는 필드. 각 피처에 맞는 기술 스택 목록(list[str])을 저장합니다.">tech_requirements</span>: <span>[]</span></div>
+          </div>
+
+          <div class="lg-edge">
+            <div class="lg-edge-line" id="edge-tech_matcher-obsidian_formatter"></div>
+            <div class="lg-cond-badge tip" id="cond-tech_matcher" data-tip="Conditional Edge&#10;조건부 엣지. 노드 실행 결과를 평가해 품질 기준을 충족하면 다음 노드로, 아니면 현재 노드를 재시도(루프)합니다.">↺ conditional_edge</div>
+            <div class="lg-interrupt-badge tip" id="int-tech_matcher" data-tip="interrupt_after&#10;이 노드 실행 후 그래프를 자동으로 일시 정지합니다. 사람이 결과를 검토·수정하고 재개(resume)할 때까지 State가 보존됩니다.">⏸ interrupt_after</div>
+            <div class="lg-edge-arrow" id="arrow-tech_matcher-obsidian_formatter"></div>
+          </div>
+
+          <div class="lg-node-box" id="lgn-obsidian_formatter">
+            <div class="lg-node-top">
+              <span class="lg-node-icon">📝</span>
+              <span class="lg-node-name tip" data-tip="Node — obsidian_formatter&#10;피처·기술 스택 정보를 Obsidian 마크다운 문서로 정리하는 최종 노드. 결과를 obsidian_template에 저장합니다.">obsidian_formatter</span>
+              <span class="lg-node-status-dot"></span>
+            </div>
+            <div class="lg-node-meta" id="lgn-meta-obsidian_formatter"><span class="tip" data-tip="obsidian_template&#10;이 노드가 State에 기록하는 필드. 최종 Obsidian 마크다운 문서(string) 전체를 저장합니다.">obsidian_template</span>: <span>—</span></div>
+          </div>
+
+          <div class="lg-edge">
+            <div class="lg-edge-line" id="edge-obsidian_formatter-end"></div>
+            <div class="lg-edge-arrow" id="arrow-obsidian_formatter-end"></div>
+          </div>
+
+          <div class="lg-terminal" id="lg-end" title="END">E</div>
+        </div>
+      </div>
+
+      <!-- State inspector -->
+      <div>
+        <div class="lg-section-title tip tip-right" data-tip="State&#10;모든 노드가 공유하는 데이터 저장소. 각 노드는 State를 읽고 처리 결과를 다시 기록합니다. Python TypedDict로 타입이 강제됩니다.">State</div>
+        <table class="lg-state-table" id="lg-state-table">
+          <tr>
+            <td><span class="tip tip-right" data-tip="Checkpointer&#10;각 실행 단계의 State를 스냅샷으로 저장하는 장치. MemorySaver는 메모리 저장 방식이며 Human-in-the-loop 재개에 필수입니다.">checkpointer</span></td>
+            <td>MemorySaver</td>
+          </tr>
+          <tr>
+            <td><span class="tip tip-right" data-tip="interrupt_after&#10;지정한 노드 실행 직후 그래프를 일시 중단합니다. 사람이 결과를 검토·수정하고 resume할 때까지 State가 유지됩니다.">interrupt_after</span></td>
+            <td><span style="color:var(--review);font-family:var(--font-mono);font-size:9.5px">["decomposer","tech_matcher"]</span></td>
+          </tr>
+          <tr>
+            <td><span class="tip tip-right" data-tip="thread_id&#10;하나의 대화 흐름을 식별하는 고유 ID. 같은 thread_id로 재요청하면 Checkpointer가 이전 State를 불러와 대화를 이어갑니다.">thread_id</span></td>
+            <td id="st-thread">—</td>
+          </tr>
+          <tr>
+            <td><span class="tip tip-right" data-tip="current_node&#10;현재 실행 중이거나 마지막으로 완료된 노드 이름. 그래프가 어느 단계에 있는지 실시간으로 표시합니다.">current_node</span></td>
+            <td id="st-node" class="lg-state-val">—</td>
+          </tr>
+          <tr>
+            <td><span class="tip tip-right" data-tip="features&#10;decomposer 노드가 State의 feature_breakdown 필드에 저장한 피처 개수입니다.">features</span></td>
+            <td id="st-features" class="lg-state-val">0개</td>
+          </tr>
+          <tr>
+            <td><span class="tip tip-right" data-tip="tech_stack&#10;tech_matcher 노드가 State의 tech_requirements 필드에 저장한 기술 추천 항목 수입니다.">tech_stack</span></td>
+            <td id="st-tech" class="lg-state-val">0개</td>
+          </tr>
+          <tr>
+            <td><span class="tip tip-right" data-tip="obsidian&#10;obsidian_formatter 노드가 생성한 최종 마크다운 문서의 존재 여부. 완료되면 ✅로 표시됩니다.">obsidian</span></td>
+            <td id="st-obsidian" class="lg-state-val">—</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Event log -->
+      <div>
+        <div class="lg-section-title tip tip-right" data-tip="Event Log&#10;그래프 실행 중 발생하는 모든 이벤트를 시간순으로 기록합니다. node_start, interrupt, resume 등 LangGraph의 내부 흐름을 추적할 수 있습니다.">Event Log</div>
+        <div class="lg-log" id="lg-log">
+          <div class="lg-log-entry" style="opacity:.4">
+            <span class="lg-log-type start">idle</span>
+            <span class="lg-log-msg">파이프라인 대기 중</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<script>
+  marked.setOptions({ breaks: true, gfm: true });
+
+  function renderMarkdown(text) {
+    return marked.parse(text
+      .replace(/<updated_features>[\s\S]*?<\/updated_features>/g, '')
+      .replace(/<updated_tech>[\s\S]*?<\/updated_tech>/g, '')
+      .replace(/<updated_features>[\s\S]*/g, '')
+      .replace(/<updated_tech>[\s\S]*/g, '')
+      .replace(/<ask_proceed\/>/g, '')
+      .replace(/<auto_proceed\/>/g, '')
+      .trim());
+  }
+
+  const messagesEl  = document.getElementById('messages');
+  const resultEl    = document.getElementById('result-content');
+  const inputEl     = document.getElementById('user-input');
+  const sendBtn     = document.getElementById('send-btn');
+  const inputArea   = document.getElementById('input-area');
+  const hintText    = document.getElementById('hint-text');
+  const pipelineBar = document.getElementById('pipeline-bar');
+  const stepperEl   = document.getElementById('stepper');
+  const reviewBanner= document.getElementById('review-banner');
+  const reviewGuide = document.getElementById('review-guide');
+  const confirmBtn  = document.getElementById('confirm-btn');
+
+  let currentThreadId  = null;
+  let reviewMode       = false;
+  let currentReviewNode = null;
+
+  // ── 유틸 ───────────────────────────────────
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function scrollChat()   { messagesEl.scrollTop = messagesEl.scrollHeight; }
+  function scrollResult() { resultEl.scrollTop   = resultEl.scrollHeight; }
+
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 110) + 'px';
+  });
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  function useExample(btn) {
+    inputEl.value = btn.textContent;
+    inputEl.dispatchEvent(new Event('input'));
+    inputEl.focus();
+  }
+
+  // ── 채팅 버블 ───────────────────────────────
+  function addUserBubble(text) {
+    document.getElementById('welcome')?.remove();
+    const d = document.createElement('div');
+    d.className = 'msg user';
+    d.innerHTML = `<div class="bubble">${escHtml(text)}</div>`;
+    messagesEl.appendChild(d);
+    scrollChat();
+  }
+  function createBubble(type = 'assistant') {
+    const d = document.createElement('div');
+    d.className = `msg ${type}`;
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    d.appendChild(b);
+    messagesEl.appendChild(d);
+    scrollChat();
+    return b;
+  }
+  function addSystemNotice(text, type = '') {
+    const d = document.createElement('div');
+    d.className = `system-notice${type ? ' ' + type : ''}`;
+    d.textContent = text;
+    messagesEl.appendChild(d);
+    scrollChat();
+  }
+
+  // ── 스테퍼 ──────────────────────────────────
+  const NODE_ICONS = { decomposer:'🔍', tech_matcher:'⚙️', obsidian_formatter:'📝' };
+  const STEP_NUM   = { decomposer:'1', tech_matcher:'2', obsidian_formatter:'3' };
+
+  function initStepper(nodes, nodeKo) {
+    stepperEl.innerHTML = '';
+    nodes.forEach((n, i) => {
+      const item = document.createElement('div');
+      item.className = 'step-item'; item.id = `step-${n}`;
+      const circle = document.createElement('div');
+      circle.className = 'step-circle'; circle.id = `circle-${n}`;
+      circle.textContent = STEP_NUM[n];
+      const info = document.createElement('div'); info.className = 'step-info';
+      const name = document.createElement('div'); name.className = 'step-name';
+      name.textContent = `${NODE_ICONS[n]} ${nodeKo[n]}`;
+      const st = document.createElement('div'); st.className = 'step-status'; st.id = `step-status-${n}`;
+      st.textContent = '대기 중';
+      info.appendChild(name); info.appendChild(st);
+      item.appendChild(circle); item.appendChild(info);
+      stepperEl.appendChild(item);
+      if (i < nodes.length - 1) {
+        const conn = document.createElement('div');
+        conn.className = 'step-connector'; conn.id = `conn-${n}`;
+        stepperEl.appendChild(conn);
+      }
+    });
+    pipelineBar.classList.add('active');
+  }
+
+  function setStepStatus(node, status) {
+    const item   = document.getElementById(`step-${node}`);
+    const circle = document.getElementById(`circle-${node}`);
+    const st     = document.getElementById(`step-status-${node}`);
+    const conn   = document.getElementById(`conn-${node}`);
+    if (!item) return;
+    item.className = `step-item ${status}`;
+    if (status === 'running') { circle.textContent = '…'; if (st) st.textContent = '실행 중'; }
+    if (status === 'review')  { circle.textContent = '✎'; if (st) st.textContent = '검토 중'; }
+    if (status === 'done')    { circle.textContent = '✓'; if (st) st.textContent = '완료';   if (conn) conn.classList.add('done'); }
+  }
+
+  function resetStepper() { pipelineBar.classList.remove('active'); }
+
+  // ── 왼쪽 결과 패널 ──────────────────────────
+  function initResultPanel(nodes, nodeKo) {
+    document.getElementById('result-placeholder')?.remove();
+    resultEl.innerHTML = '';
+    nodes.forEach(n => {
+      const sec = document.createElement('div');
+      sec.className = 'node-section'; sec.id = `sec-${n}`;
+      sec.innerHTML = `
+        <div class="node-section-header">
+          <span>${NODE_ICONS[n]} ${nodeKo[n]}</span>
+          <span id="sec-status-${n}" style="font-size:10px;opacity:.7">대기 중</span>
+        </div>
+        <div class="node-section-body" id="sec-body-${n}"></div>`;
+      resultEl.appendChild(sec);
+    });
+  }
+
+  function setSectionStatus(node, status) {
+    const sec = document.getElementById(`sec-${node}`);
+    const st  = document.getElementById(`sec-status-${node}`);
+    if (!sec) return;
+    sec.className = `node-section ${status}`;
+    if (status === 'running') { if (st) st.textContent = '실행 중'; }
+    if (status === 'review')  { if (st) st.textContent = '검토 중'; }
+    if (status === 'done')    { if (st) st.textContent = '완료'; }
+  }
+
+  function appendStreamToken(node, token) {
+    const body = document.getElementById(`sec-body-${node}`);
+    if (!body) return;
+    let span = body.querySelector('.stream-text');
+    if (!span) { span = document.createElement('span'); span.className = 'stream-text'; body.appendChild(span); }
+    span.querySelector('.cursor')?.remove();
+    span.appendChild(document.createTextNode(token));
+    const c = document.createElement('span'); c.className = 'cursor'; span.appendChild(c);
+    scrollResult();
+  }
+
+  function renderSectionResult(node, result) {
+    const body = document.getElementById(`sec-body-${node}`);
+    if (!body) return;
+    body.innerHTML = '';
+
+    if (node === 'decomposer' && result.features) {
+      body.innerHTML = result.features.map(f => `
+        <div class="feature-item">
+          <div><span class="feature-id">${escHtml(f.id??'')}</span><span class="feature-name">${escHtml(f.name??'')}</span></div>
+          <div class="feature-desc">${escHtml(f.description??'')}</div>
+        </div>`).join('');
+    } else if (node === 'tech_matcher' && result.tech) {
+      body.innerHTML = result.tech.map((t,i) =>
+        `<div class="tech-item"><span class="tech-num">${i+1}</span>${escHtml(t)}</div>`
+      ).join('');
+    } else if (node === 'obsidian_formatter' && result.obsidian) {
+      const wrap = document.createElement('div');
+      wrap.className = 'obsidian-wrap';
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'obsidian-copy-btn';
+      copyBtn.textContent = '📋 복사';
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(result.obsidian).then(() => {
+          copyBtn.textContent = '✅ 복사됨';
+          copyBtn.classList.add('copied');
+          setTimeout(() => { copyBtn.textContent = '📋 복사'; copyBtn.classList.remove('copied'); }, 2000);
+        });
+      };
+
+      const pre = document.createElement('div');
+      pre.className = 'obsidian-block'; pre.textContent = result.obsidian;
+
+      wrap.appendChild(copyBtn);
+      wrap.appendChild(pre);
+      body.appendChild(wrap);
+    }
+    scrollResult();
+  }
+
+  // ── 리뷰 모드 ───────────────────────────────
+  function enterReviewMode(guideHtml, nextKo) {
+    reviewMode = true;
+    sendBtn.disabled = false;
+    inputArea.classList.add('review-mode');
+    inputEl.placeholder = '수정 요청이나 질문을 입력하세요...';
+    hintText.textContent = `만족하면 '확정하고 다음 단계로(${nextKo})' 버튼 또는 대화로 진행`;
+    reviewGuide.innerHTML = guideHtml;
+    reviewBanner.classList.add('active');
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = '✅ 확정하고 다음 단계로';
+    inputEl.focus();
+  }
+  function exitReviewMode() {
+    reviewMode = false;
+    inputArea.classList.remove('review-mode');
+    inputEl.placeholder = '플러그인 아이디어를 입력하세요...';
+    hintText.textContent = 'Enter로 전송 · Shift+Enter로 줄바꿈';
+    reviewBanner.classList.remove('active');
+  }
+  async function confirmAndContinue() {
+    if (!currentThreadId) return;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '진행 중...';
+    await fetch(`/continue/${currentThreadId}`, { method: 'POST' });
+  }
+
+  // ── 리뷰 메시지 전송 ────────────────────────
+  let reviewBubble = null;
+
+  async function sendReviewMessage(text) {
+    addUserBubble(text);
+    reviewBubble = createBubble('review-msg');
+    sendBtn.disabled = true;
+    let buf = '';
+
+    try {
+      const res = await fetch(`/review/${currentThreadId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let raw = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        raw += decoder.decode(value, { stream: true });
+        const lines = raw.split('\n'); raw = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let ev;
+          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+          if (ev.type === 'token') {
+            buf += ev.content;
+            reviewBubble.innerHTML = renderMarkdown(buf);
+            scrollChat();
+          } else if (ev.type === 'error') {
+            reviewBubble.innerHTML = `<span style="color:#f87171">⚠️ 서버 오류: ${escHtml(ev.message)}</span>`;
+            scrollChat();
+          } else if (ev.type === 'state_update') {
+            renderSectionResult(ev.node, ev.result);
+            setSectionStatus(ev.node, 'review');
+            lgUpdateNodeMeta(ev.node, ev.result);
+            lgAddLog('review', `State 업데이트: ${NODE_KO_MAP[ev.node] ?? ev.node}`);
+          } else if (ev.type === 'ask_proceed') {
+            confirmBtn.classList.add('pulse');
+            setTimeout(() => confirmBtn.classList.remove('pulse'), 2000);
+          } else if (ev.type === 'auto_proceed') {
+            addSystemNotice('다음 단계로 자동 진행합니다...');
+            setTimeout(() => fetch(`/continue/${currentThreadId}`, { method: 'POST' }), 800);
+          }
+        }
+      }
+    } catch (err) {
+      reviewBubble.innerHTML = `<span style="color:#f87171">⚠️ 연결 오류: ${escHtml(String(err))}</span>`;
+      scrollChat();
+    }
+  }
+
+  // ── 메인 전송 ────────────────────────────────
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text || sendBtn.disabled) return;
+    inputEl.value = ''; inputEl.style.height = 'auto';
+
+    if (reviewMode) {
+      await sendReviewMessage(text);
+      sendBtn.disabled = false;
+      inputEl.focus();
+      return;
+    }
+
+    sendBtn.disabled = true;
+    addUserBubble(text);
+
+    try {
+      const res = await fetch('/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let raw = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        raw += decoder.decode(value, { stream: true });
+        const lines = raw.split('\n'); raw = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          handlePipelineEvent(JSON.parse(line.slice(6)));
+        }
+      }
+    } catch (err) {
+      addSystemNotice(`오류: ${err}`);
+    }
+
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+
+  // ── LangGraph 패널 ───────────────────────────
+  const lgLog      = document.getElementById('lg-log');
+  const stThread   = document.getElementById('st-thread');
+  const stNode     = document.getElementById('st-node');
+  const stFeatures = document.getElementById('st-features');
+  const stTech     = document.getElementById('st-tech');
+  const stObsidian = document.getElementById('st-obsidian');
+
+  const EDGE_PAIRS = [
+    ['start', 'decomposer'],
+    ['decomposer', 'tech_matcher'],
+    ['tech_matcher', 'obsidian_formatter'],
+    ['obsidian_formatter', 'end'],
+  ];
+
+  function lgAddLog(type, msg) {
+    const entry = document.createElement('div');
+    entry.className = 'lg-log-entry';
+    entry.innerHTML = `<span class="lg-log-type ${type}">${type}</span><span class="lg-log-msg">${escHtml(msg)}</span>`;
+    lgLog.appendChild(entry);
+    lgLog.scrollTop = lgLog.scrollHeight;
+    // 최대 40개 유지
+    while (lgLog.children.length > 40) lgLog.removeChild(lgLog.firstChild);
+  }
+
+  function lgSetNodeStatus(node, status) {
+    const box = document.getElementById(`lgn-${node}`);
+    if (!box) return;
+    box.className = `lg-node-box ${status}`;
+  }
+
+  function lgSetEdgeDone(from, to) {
+    const line  = document.getElementById(`edge-${from}-${to}`);
+    const arrow = document.getElementById(`arrow-${from}-${to}`);
+    if (line)  line.classList.add('done');
+    if (arrow) arrow.classList.add('done');
+  }
+
+  function lgTriggerInterrupt(node) {
+    const badge = document.getElementById(`int-${node}`);
+    if (!badge) return;
+    badge.classList.add('triggered');
+    setTimeout(() => badge.classList.remove('triggered'), 1500);
+  }
+
+  function lgUpdateNodeMeta(node, result) {
+    const meta = document.getElementById(`lgn-meta-${node}`);
+    if (!meta) return;
+    if (node === 'decomposer' && result.features) {
+      meta.innerHTML = `feature_breakdown: <span>${result.features.length}개</span>`;
+      stFeatures.textContent = `${result.features.length}개`;
+    } else if (node === 'tech_matcher' && result.tech) {
+      meta.innerHTML = `tech_requirements: <span>${result.tech.length}개</span>`;
+      stTech.textContent = `${result.tech.length}개`;
+    } else if (node === 'obsidian_formatter' && result.obsidian) {
+      const lines = result.obsidian.split('\n').length;
+      meta.innerHTML = `obsidian_template: <span>${lines}줄</span>`;
+      stObsidian.textContent = '생성됨';
+    }
+  }
+
+  function lgReset() {
+    ['decomposer','tech_matcher','obsidian_formatter'].forEach(n => lgSetNodeStatus(n, ''));
+    EDGE_PAIRS.forEach(([f,t]) => {
+      document.getElementById(`edge-${f}-${t}`)?.classList.remove('done');
+      document.getElementById(`arrow-${f}-${t}`)?.classList.remove('done');
+    });
+    // S: 대기 중 강조, E: 꺼진 상태
+    const s = document.getElementById('lg-start');
+    const e = document.getElementById('lg-end');
+    if (s) { s.className = 'lg-terminal active'; }
+    if (e) { e.className = 'lg-terminal'; }
+    stThread.textContent = '—'; stNode.textContent = '—';
+    stFeatures.textContent = '0개'; stTech.textContent = '0개'; stObsidian.textContent = '—';
+  }
+
+  // ── 파이프라인 이벤트 핸들러 ─────────────────
+  const NODE_KO_MAP = { decomposer:'아이디어 분해', tech_matcher:'기술 스택 매칭', obsidian_formatter:'Obsidian 문서 생성' };
+
+  function handlePipelineEvent(ev) {
+    if (ev.type === 'start') {
+      currentThreadId = ev.thread_id;
+      initStepper(ev.nodes, ev.node_ko);
+      initResultPanel(ev.nodes, ev.node_ko);
+      lgReset();
+      lgLog.innerHTML = '';
+      stThread.textContent = ev.thread_id.slice(0, 8) + '…';
+      lgAddLog('start', `파이프라인 시작 · ${ev.nodes.length}개 노드`);
+      // S: 실행 시작됐으니 done으로
+      const lgS = document.getElementById('lg-start');
+      if (lgS) lgS.className = 'lg-terminal done';
+      lgSetEdgeDone('start', 'decomposer');
+
+    } else if (ev.type === 'node_start') {
+      if (ev.retry) {
+        addSystemNotice(`🔄 품질 검증 미달 — ${ev.reason}`, 'retry');
+        const condBadge = document.getElementById(`cond-${ev.node}`);
+        if (condBadge) {
+          condBadge.classList.add('retrying');
+          setTimeout(() => condBadge.classList.remove('retrying'), 1800);
+        }
+        lgAddLog('retry', `재시도 사유: ${ev.reason}`);
+      }
+      setStepStatus(ev.node, 'running');
+      setSectionStatus(ev.node, 'running');
+      lgSetNodeStatus(ev.node, 'running');
+      stNode.textContent = ev.node;
+      lgAddLog('node_start', `${NODE_KO_MAP[ev.node] ?? ev.node} ${ev.retry ? '재시도 중…' : '실행 중…'}`);
+
+    } else if (ev.type === 'token') {
+      appendStreamToken(ev.node, ev.content);
+
+    } else if (ev.type === 'node_done') {
+      setStepStatus(ev.node, 'done');
+      setSectionStatus(ev.node, 'done');
+      renderSectionResult(ev.node, ev.result);
+      lgSetNodeStatus(ev.node, 'done');
+      lgUpdateNodeMeta(ev.node, ev.result);
+      // 재시도 횟수 노드에 표시
+      const retries = (ev.result?.retries ?? 1) - 1;
+      if (retries > 0) {
+        const nameEl = document.querySelector(`#lgn-${ev.node} .lg-node-name`);
+        if (nameEl && !nameEl.querySelector('.lg-node-retry-badge')) {
+          const badge = document.createElement('span');
+          badge.className = 'lg-node-retry-badge';
+          badge.textContent = `↺${retries}`;
+          nameEl.appendChild(badge);
+        }
+      }
+      const nextEdgeMap = { decomposer:'tech_matcher', tech_matcher:'obsidian_formatter', obsidian_formatter:'end' };
+      if (nextEdgeMap[ev.node]) lgSetEdgeDone(ev.node, nextEdgeMap[ev.node]);
+      lgAddLog('node_done', `${NODE_KO_MAP[ev.node] ?? ev.node} 완료${retries > 0 ? ` (재시도 ${retries}회)` : ''}`);
+
+    } else if (ev.type === 'review_start') {
+      currentReviewNode = ev.node;
+      setStepStatus(ev.node, 'review');
+      setSectionStatus(ev.node, 'review');
+      lgSetNodeStatus(ev.node, 'review');
+      lgTriggerInterrupt(ev.node);
+      stNode.textContent = `${ev.node} (검토 중)`;
+      lgAddLog('interrupt', `interrupt_after: ${ev.node}`);
+      lgAddLog('review', `Human-in-the-Loop 대기 중`);
+      const nextKo = NODE_KO_MAP[ev.next] ?? ev.next;
+      enterReviewMode(ev.guide, nextKo);
+      // AI가 먼저 인사
+      if (ev.opening) {
+        const bubble = createBubble('review-msg');
+        bubble.innerHTML = renderMarkdown(ev.opening);
+      }
+
+    } else if (ev.type === 'review_end') {
+      if (currentReviewNode) {
+        setStepStatus(currentReviewNode, 'done');
+        setSectionStatus(currentReviewNode, 'done');
+        lgSetNodeStatus(currentReviewNode, 'done');
+        lgAddLog('resume', `검토 완료 → 파이프라인 재개`);
+        currentReviewNode = null;
+      }
+      exitReviewMode();
+
+    } else if (ev.type === 'done') {
+      exitReviewMode();
+      stNode.textContent = 'END';
+      lgSetEdgeDone('obsidian_formatter', 'end');
+      // E: 완료됐으니 done으로
+      const lgE = document.getElementById('lg-end');
+      if (lgE) lgE.className = 'lg-terminal done';
+      lgAddLog('done', `파이프라인 완료 ✓`);
+      setTimeout(resetStepper, 2500);
+    }
+  }
+</script>
+
+<!-- Global tooltip -->
+<div id="global-tip">
+  <span class="tip-title" id="tip-title"></span>
+  <span class="tip-body"  id="tip-body"></span>
+</div>
+<script>
+(function() {
+  const tip      = document.getElementById('global-tip');
+  const tipTitle = document.getElementById('tip-title');
+  const tipBody  = document.getElementById('tip-body');
+  const GAP = 10;
+  let hideTimer  = null;
+  let showTimer  = null;
+
+  function render(text) {
+    const nl = text.indexOf('\n');
+    if (nl !== -1) {
+      tipTitle.textContent = text.slice(0, nl);
+      tipTitle.style.display = 'block';
+      tipBody.textContent  = text.slice(nl + 1);
+    } else {
+      tipTitle.style.display = 'none';
+      tipBody.textContent = text;
+    }
+  }
+
+  function place(rect) {
+    // 크기 측정을 위해 일단 숨겨진 채 DOM에 올림
+    tip.style.visibility = 'hidden';
+    tip.style.display = 'block';
+    const tw = tip.offsetWidth;
+    const th = tip.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const cx = rect.left + rect.width / 2;
+
+    // 위 / 아래 선택
+    let top, arrowDir;
+    if (rect.top - th - GAP > 8) {
+      top = rect.top - th - GAP;
+      arrowDir = 'arrow-up';   // 화살표가 아래쪽 (요소 위에 tooltip)
+    } else {
+      top = rect.bottom + GAP;
+      arrowDir = 'arrow-down'; // 화살표가 위쪽 (요소 아래에 tooltip)
+    }
+
+    // 좌우 중앙 정렬 + 뷰포트 보정
+    let left = cx - tw / 2;
+    if (left < 8) left = 8;
+    if (left + tw > vw - 8) left = vw - tw - 8;
+
+    // 화살표 위치 = 요소 중앙이 툴팁의 어디쯤인지
+    const arrowLeft = Math.min(Math.max(cx - left, 16), tw - 16);
+    tip.style.setProperty('--arrow-left', arrowLeft + 'px');
+
+    tip.className = arrowDir;
+    tip.style.left = left + 'px';
+    tip.style.top  = top  + 'px';
+    tip.style.visibility = '';
+  }
+
+  function showTip(el) {
+    const text = el.getAttribute('data-tip');
+    if (!text) return;
+    clearTimeout(hideTimer);
+    render(text);
+    place(el.getBoundingClientRect());
+    // 강제 reflow 후 transition 적용
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => tip.classList.add('visible'));
+    });
+  }
+
+  function hideTip() {
+    tip.classList.remove('visible');
+  }
+
+  document.addEventListener('mouseover', function(e) {
+    const el = e.target.closest('[data-tip]');
+    if (el) { clearTimeout(hideTimer); showTip(el); }
+  });
+
+  document.addEventListener('mouseout', function(e) {
+    const el = e.target.closest('[data-tip]');
+    if (el) hideTimer = setTimeout(hideTip, 100);
+  });
+
+  document.addEventListener('scroll', hideTip, true);
+  document.addEventListener('click',  hideTip, true);
+})();
+</script>
+</body>
+</html>
