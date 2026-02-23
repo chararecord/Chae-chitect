@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import sqlite3
+import sys
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -14,7 +15,11 @@ from pathlib import Path
 
 logger = logging.getLogger("chae-chitect")
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+_BACKEND_DIR = Path(__file__).resolve().parent
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
+BASE_DIR = _BACKEND_DIR.parent
 
 # ── 세션 스토어 ──────────────────────────────────────────────
 _SESSIONS_DB = BASE_DIR / "backend" / "data" / "sessions.db"
