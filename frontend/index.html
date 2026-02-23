@@ -102,7 +102,7 @@
     @keyframes cpulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06);box-shadow:0 0 0 6px rgba(52,211,153,.25)} }
 
     /* ── Split layout ── */
-    main { display: flex; flex: 1; overflow: hidden; }
+    main { display: flex; flex: 1; overflow: hidden; min-height: 0; }
 
     /* LEFT: result panel */
     #result-panel {
@@ -111,6 +111,7 @@
       background: var(--surface);
       display: flex; flex-direction: column;
       overflow: hidden; flex-shrink: 0;
+      min-height: 0;
     }
     #result-panel-header {
       padding: 12px 18px 10px;
@@ -120,8 +121,10 @@
     }
     #result-content {
       flex: 1; overflow-y: auto; padding: 16px 18px;
-      display: flex; flex-direction: column; gap: 20px;
+      min-height: 0;
     }
+    #result-content .node-section { margin-bottom: 20px; }
+    #result-content .node-section:last-child { margin-bottom: 0; }
     #result-content::-webkit-scrollbar { width: 5px; }
     #result-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
@@ -291,6 +294,7 @@
       background: var(--surface);
       display: flex; flex-direction: column;
       overflow: hidden; flex-shrink: 0;
+      min-height: 0;
     }
     #lg-panel-header {
       padding: 12px 16px 10px;
@@ -309,8 +313,10 @@
     }
     #lg-scroll {
       flex: 1; overflow-y: auto; padding: 14px 14px 20px;
-      display: flex; flex-direction: column; gap: 16px;
+      min-height: 0;
     }
+    #lg-scroll > * { margin-bottom: 16px; }
+    #lg-scroll > *:last-child { margin-bottom: 0; }
     #lg-scroll::-webkit-scrollbar { width: 4px; }
     #lg-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
@@ -578,6 +584,103 @@
     #send-btn svg { width: 15px; height: 15px; fill: #fff; }
     .hint { font-size: 11px; color: var(--muted); margin-top: 7px; text-align: center; }
     #input-area.review-mode .hint { color: var(--review); opacity: .7; }
+
+    /* ── Header actions ── */
+    .header-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+    .header-btn {
+      padding: 5px 12px; background: var(--surface2);
+      border: 1px solid var(--border); color: var(--text2);
+      border-radius: 8px; font-size: 12px; cursor: pointer;
+      transition: all .2s; font-family: inherit;
+    }
+    .header-btn:hover { border-color: var(--accent); color: var(--accent2); }
+
+    /* ── Session loaded banner ── */
+    #session-loaded-banner {
+      display: none; align-items: center; justify-content: center; gap: 12px;
+      padding: 7px 20px; font-size: 12.5px; flex-shrink: 0;
+      background: rgba(52,211,153,.06); border-bottom: 1px solid rgba(52,211,153,.25);
+      color: var(--green);
+    }
+    #session-loaded-banner.active { display: flex; }
+    #session-loaded-banner button {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 6px; padding: 3px 12px; font-size: 11.5px;
+      cursor: pointer; font-family: inherit;
+    }
+    #session-loaded-banner button:hover { filter: brightness(1.1); }
+
+    /* ── History Drawer ── */
+    #history-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.45); backdrop-filter: blur(2px);
+    }
+    #history-overlay.open { display: block; }
+    #history-drawer {
+      position: absolute; right: 0; top: 0; bottom: 0;
+      width: 340px; background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform .28s cubic-bezier(.22,.68,0,1.05);
+    }
+    #history-overlay.open #history-drawer { transform: translateX(0); }
+    #history-drawer-header {
+      padding: 15px 18px 13px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .history-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
+    .history-close-btn {
+      background: none; border: 1px solid transparent; color: var(--muted);
+      font-size: 15px; cursor: pointer; border-radius: 6px; padding: 3px 8px;
+      transition: all .15s; line-height: 1; font-family: inherit;
+    }
+    .history-close-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--border); }
+    #history-list {
+      flex: 1; overflow-y: auto; padding: 10px;
+      display: flex; flex-direction: column; gap: 7px;
+    }
+    #history-list::-webkit-scrollbar { width: 4px; }
+    #history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .history-empty {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; color: var(--muted); text-align: center;
+      padding: 32px; gap: 8px;
+    }
+    .history-empty .h-icon { font-size: 30px; opacity: .3; }
+    .history-empty p { font-size: 12.5px; line-height: 1.6; }
+    .session-item {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 11px 12px;
+      cursor: pointer; transition: all .2s; position: relative;
+    }
+    .session-item:hover { border-color: var(--accent); background: rgba(108,99,255,.07); }
+    .session-item.current { border-color: var(--accent2); background: rgba(167,139,250,.08); }
+    .session-item-title {
+      font-size: 12.5px; font-weight: 600; color: var(--text);
+      overflow: hidden; display: -webkit-box;
+      -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      margin-bottom: 6px; line-height: 1.45; padding-right: 22px;
+    }
+    .session-item-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 5px; }
+    .session-item-date { font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+    .session-item-badge { font-size: 9.5px; padding: 1px 7px; border-radius: 10px; font-family: var(--font-mono); }
+    .session-item-badge.completed { background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.3); color: var(--green); }
+    .session-item-badge.running   { background: rgba(251,191,36,.1);  border: 1px solid rgba(251,191,36,.3);  color: var(--yellow); }
+    .session-item-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+    .session-item-chip {
+      font-size: 10px; color: var(--text2); background: var(--bg);
+      border: 1px solid var(--border); border-radius: 5px; padding: 1px 7px;
+    }
+    .session-item-del {
+      position: absolute; top: 8px; right: 8px;
+      background: none; border: 1px solid transparent; color: var(--muted);
+      font-size: 12px; cursor: pointer; border-radius: 5px; padding: 2px 6px;
+      transition: all .15s; opacity: 0; line-height: 1; font-family: inherit;
+    }
+    .session-item:hover .session-item-del { opacity: 1; }
+    .session-item-del:hover { background: rgba(248,113,113,.15); border-color: rgba(248,113,113,.3); color: #f87171; }
   </style>
 </head>
 <body>
@@ -585,7 +688,16 @@
 <header>
   <span class="logo">🏛 Chae-chitect</span>
   <span class="badge">LangGraph · GPT-4o</span>
+  <div class="header-actions">
+    <button class="header-btn" id="new-session-btn" onclick="startNewSession()">✏️ 새 대화</button>
+    <button class="header-btn" onclick="openHistory()">📋 히스토리</button>
+  </div>
 </header>
+
+<div id="session-loaded-banner">
+  <span>📂 이전 세션 불러옴 · 메시지를 입력하면 이 대화가 이어집니다</span>
+  <button onclick="startNewSession()">✏️ 새 대화 시작</button>
+</div>
 
 <!-- Stepper + review banner: full width -->
 <div id="pipeline-bar">
@@ -753,6 +865,22 @@
   </div>
 </main>
 
+<!-- History drawer overlay -->
+<div id="history-overlay" onclick="closeHistoryIfOutside(event)">
+  <div id="history-drawer">
+    <div id="history-drawer-header">
+      <span class="history-title">📋 대화 히스토리</span>
+      <button class="history-close-btn" onclick="closeHistory()">✕</button>
+    </div>
+    <div id="history-list">
+      <div class="history-empty">
+        <div class="h-icon">📭</div>
+        <p>저장된 대화가 없습니다</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   marked.setOptions({ breaks: true, gfm: true });
 
@@ -779,9 +907,10 @@
   const reviewGuide = document.getElementById('review-guide');
   const confirmBtn  = document.getElementById('confirm-btn');
 
-  let currentThreadId  = null;
-  let reviewMode       = false;
+  let currentThreadId   = null;
+  let reviewMode        = false;
   let currentReviewNode = null;
+  let loadedSessionId   = null;
 
   // ── 유틸 ───────────────────────────────────
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -973,7 +1102,19 @@
     if (!currentThreadId) return;
     confirmBtn.disabled = true;
     confirmBtn.textContent = '진행 중...';
-    await fetch(`/continue/${currentThreadId}`, { method: 'POST' });
+    try {
+      const res  = await fetch(`/continue/${currentThreadId}`, { method: 'POST' });
+      const data = await res.json();
+      if (!data.ok) {
+        addSystemNotice('⚠️ 파이프라인 상태가 만료됐습니다. 새 대화를 시작하거나 대화로 결과를 수정하세요.', 'retry');
+        exitReviewMode();
+        currentThreadId = null;
+      }
+    } catch (e) {
+      addSystemNotice('⚠️ 연결 오류가 발생했습니다.', 'retry');
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = '✅ 확정하고 다음 단계로';
+    }
   }
 
   // ── 리뷰 메시지 전송 ────────────────────────
@@ -1044,6 +1185,14 @@
       return;
     }
 
+    // 불러온 세션이 있으면 기존 대화 이어가기
+    if (loadedSessionId) {
+      await sendContinueMessage(text);
+      sendBtn.disabled = false;
+      inputEl.focus();
+      return;
+    }
+
     sendBtn.disabled = true;
     addUserBubble(text);
 
@@ -1071,6 +1220,48 @@
 
     sendBtn.disabled = false;
     inputEl.focus();
+  }
+
+  async function sendContinueMessage(text) {
+    sendBtn.disabled = true;
+    addUserBubble(text);
+    const bubble = createBubble('assistant');
+
+    try {
+      const res = await fetch(`/stream/chat/${loadedSessionId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let raw = '', fullText = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        raw += decoder.decode(value, { stream: true });
+        const lines = raw.split('\n'); raw = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const evt = JSON.parse(line.slice(6));
+          if (evt.type === 'token') {
+            fullText += evt.content;
+            bubble.innerHTML = renderMarkdown(fullText);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          } else if (evt.type === 'state_update') {
+            // 결과 패널 + 스테퍼 + LangGraph 패널 즉시 갱신
+            renderSectionResult(evt.node, evt.result);
+            setSectionStatus(evt.node, 'done');
+            setStepStatus(evt.node, 'done');
+            lgUpdateNodeMeta(evt.node, evt.result);
+            lgAddLog('node_done', `${evt.node} 수정 완료`);
+          } else if (evt.type === 'error') {
+            addSystemNotice(`⚠️ ${escHtml(evt.message)}`);
+          }
+        }
+      }
+    } catch (err) {
+      addSystemNotice(`오류: ${err}`);
+    }
   }
 
   // ── LangGraph 패널 ───────────────────────────
@@ -1243,6 +1434,252 @@
       lgAddLog('done', `파이프라인 완료 ✓`);
       setTimeout(resetStepper, 2500);
     }
+  }
+
+  // ── 히스토리 드로어 ─────────────────────────────────────────
+  async function openHistory() {
+    document.getElementById('history-overlay').classList.add('open');
+    await loadSessionList();
+  }
+  function closeHistory() {
+    document.getElementById('history-overlay').classList.remove('open');
+  }
+  function closeHistoryIfOutside(e) {
+    if (e.target === document.getElementById('history-overlay')) closeHistory();
+  }
+
+  async function loadSessionList() {
+    const list = document.getElementById('history-list');
+    list.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:12px;text-align:center">불러오는 중…</div>';
+    try {
+      const res = await fetch('/sessions');
+      const sessions = await res.json();
+      if (!sessions.length) {
+        list.innerHTML = '<div class="history-empty"><div class="h-icon">📭</div><p>저장된 대화가 없습니다</p></div>';
+        return;
+      }
+      list.innerHTML = '';
+      sessions.forEach(s => list.appendChild(renderSessionItem(s)));
+    } catch (err) {
+      list.innerHTML = `<div style="padding:20px;color:#f87171;font-size:12px">불러오기 실패: ${escHtml(String(err))}</div>`;
+    }
+  }
+
+  function _fmtDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const diff = Date.now() - d;
+    if (diff < 60000) return '방금 전';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}분 전`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}시간 전`;
+    return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function renderSessionItem(s) {
+    const div = document.createElement('div');
+    div.className = `session-item${s.thread_id === loadedSessionId ? ' current' : ''}`;
+    const statusLabel = s.status === 'completed' ? '완료' : '진행 중';
+    const chips = [
+      s.feature_count > 0 ? `<span class="session-item-chip">피처 ${s.feature_count}개</span>` : '',
+      s.tech_count    > 0 ? `<span class="session-item-chip">기술 ${s.tech_count}개</span>` : '',
+      s.has_obsidian      ? `<span class="session-item-chip">📝 Obsidian</span>` : '',
+    ].filter(Boolean).join('');
+    div.innerHTML = `
+      <button class="session-item-del" title="삭제">✕</button>
+      <div class="session-item-title">${escHtml(s.title)}</div>
+      <div class="session-item-meta">
+        <span class="session-item-date">${_fmtDate(s.completed_at || s.created_at)}</span>
+        <span class="session-item-badge ${s.status}">${statusLabel}</span>
+      </div>
+      ${chips ? `<div class="session-item-chips">${chips}</div>` : ''}`;
+    div.querySelector('.session-item-del').addEventListener('click', e => {
+      e.stopPropagation();
+      deleteSession(s.thread_id, div);
+    });
+    div.addEventListener('click', () => loadSession(s.thread_id));
+    return div;
+  }
+
+  async function loadSession(threadId) {
+    try {
+      const res = await fetch(`/sessions/${threadId}`);
+      if (!res.ok) throw new Error('세션을 찾을 수 없습니다');
+      const s = await res.json();
+      closeHistory();
+      loadedSessionId = threadId;
+
+      // 화면 초기화
+      messagesEl.innerHTML = '';
+      document.getElementById('result-content').innerHTML =
+        '<div id="result-placeholder"><div class="icon">🏛</div><p>불러오는 중...</p></div>';
+      pipelineBar.classList.remove('active');
+      lgReset();
+      if (reviewMode) exitReviewMode();
+      reviewMode = false; currentThreadId = null;
+
+      // 결과 복원 — 스테퍼 + 결과 패널 모두 초기화 후 데이터 채움
+      const _nodes  = ["decomposer", "tech_matcher", "obsidian_formatter"];
+      const _nodeKo = { decomposer:"아이디어 분해", tech_matcher:"기술 스택 매칭", obsidian_formatter:"Obsidian 문서 생성" };
+      initStepper(_nodes, _nodeKo);   // ← pipelineBar.active도 내부에서 처리
+      initResultPanel(_nodes, _nodeKo);
+      // running 세션은 마지막 데이터 보유 노드를 'review', 이전 노드는 'done'으로 표시
+      const isCompleted = s.status === 'completed';
+      // features만 있음 → decomposer 검토 중 중단
+      // features+tech 있음 → tech_matcher 검토 중 중단
+      const lastReviewNode = !isCompleted
+        ? (s.obsidian                          ? null
+          : s.tech && s.tech.length            ? 'tech_matcher'
+          : s.features && s.features.length    ? 'decomposer'
+          : null)
+        : null;
+
+      const nodeStatus = (node) => {
+        if (isCompleted) return 'done';
+        if (node === lastReviewNode) return 'review';
+        return 'done';
+      };
+
+      if (s.features && s.features.length) {
+        renderSectionResult('decomposer', { features: s.features });
+        setSectionStatus('decomposer', nodeStatus('decomposer'));
+        setStepStatus('decomposer', nodeStatus('decomposer'));
+      }
+      if (s.tech && s.tech.length) {
+        renderSectionResult('tech_matcher', { tech: s.tech });
+        setSectionStatus('tech_matcher', nodeStatus('tech_matcher'));
+        setStepStatus('tech_matcher', nodeStatus('tech_matcher'));
+      }
+      if (s.obsidian) {
+        renderSectionResult('obsidian_formatter', { obsidian: s.obsidian });
+        setSectionStatus('obsidian_formatter', nodeStatus('obsidian_formatter'));
+        setStepStatus('obsidian_formatter', nodeStatus('obsidian_formatter'));
+      }
+
+      // LangGraph 패널 복원
+      lgLog.innerHTML = '';
+      stThread.textContent = s.thread_id.slice(0, 8) + '…';
+      const lgS = document.getElementById('lg-start');
+      if (lgS) lgS.className = 'lg-terminal done';
+      lgAddLog('start', isCompleted ? '이전 세션 복원' : '미완료 세션 복원 (리뷰 중단)');
+
+      if (s.features && s.features.length) {
+        lgSetNodeStatus('decomposer', nodeStatus('decomposer'));
+        lgSetEdgeDone('start', 'decomposer');
+        lgSetEdgeDone('decomposer', 'tech_matcher');
+        lgUpdateNodeMeta('decomposer', { features: s.features });
+        lgAddLog(nodeStatus('decomposer') === 'review' ? 'interrupt' : 'node_done',
+          `아이디어 분해 ${nodeStatus('decomposer') === 'review' ? '검토 중단됨' : '완료'} (${s.features.length}개)`);
+      }
+      if (s.tech && s.tech.length) {
+        lgSetNodeStatus('tech_matcher', nodeStatus('tech_matcher'));
+        lgSetEdgeDone('tech_matcher', 'obsidian_formatter');
+        lgUpdateNodeMeta('tech_matcher', { tech: s.tech });
+        lgAddLog(nodeStatus('tech_matcher') === 'review' ? 'interrupt' : 'node_done',
+          `기술 스택 매칭 ${nodeStatus('tech_matcher') === 'review' ? '검토 중단됨' : '완료'} (${s.tech.length}개)`);
+      }
+      if (s.obsidian) {
+        lgSetNodeStatus('obsidian_formatter', 'done');
+        lgSetEdgeDone('obsidian_formatter', 'end');
+        lgUpdateNodeMeta('obsidian_formatter', { obsidian: s.obsidian });
+        const lgE = document.getElementById('lg-end');
+        if (lgE) lgE.className = 'lg-terminal done';
+        lgAddLog('done', 'Obsidian 문서 생성 완료 ✓');
+      }
+      stNode.textContent = s.obsidian ? 'END'
+        : (s.tech && s.tech.length)          ? 'obsidian_formatter'
+        : (s.features && s.features.length)  ? 'tech_matcher'
+        : '—';
+
+      // 메시지 복원
+      s.messages.forEach(m => {
+        if (m.role === 'user') {
+          addUserBubble(m.content);
+        } else if (m.role === 'assistant') {
+          const type = (m.msg_type === 'review_opening' || m.msg_type === 'review') ? 'review-msg' : 'assistant';
+          const b = createBubble(type);
+          b.innerHTML = renderMarkdown(m.content);
+        }
+      });
+      if (s.status === 'completed') addSystemNotice('✅ 파이프라인 완료');
+
+      // 이전 세션 불러옴 배너 표시
+      document.getElementById('session-loaded-banner').classList.add('active');
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+      document.getElementById('input-area').style.opacity = '';
+
+      // 리뷰 중 중단된 세션이면 리뷰 모드 복원
+      if (!isCompleted && lastReviewNode) {
+        const reviewNodeKo  = { decomposer:'아이디어 분해', tech_matcher:'기술 스택 매칭' };
+        const nextNodeMap   = { decomposer:'tech_matcher', tech_matcher:'obsidian_formatter' };
+        const nextKoMap     = { tech_matcher:'기술 스택 매칭', obsidian_formatter:'Obsidian 문서 생성' };
+        const nextNode      = nextNodeMap[lastReviewNode];
+        currentThreadId     = threadId;
+        currentReviewNode   = lastReviewNode;
+        enterReviewMode(
+          `<strong>${reviewNodeKo[lastReviewNode]}</strong> 결과를 검토하세요. 수정하거나 확정하면 <strong>${nextKoMap[nextNode]}</strong> 단계로 넘어갑니다.`,
+          nextKoMap[nextNode]
+        );
+      } else {
+        inputEl.placeholder = '이 결과에 대해 질문하거나 수정을 요청하세요...';
+        inputEl.focus();
+      }
+    } catch (err) {
+      addSystemNotice(`⚠️ 세션 불러오기 실패: ${escHtml(String(err))}`);
+    }
+  }
+
+  async function deleteSession(threadId, itemEl) {
+    if (!confirm('이 세션을 삭제할까요?')) return;
+    try {
+      const res  = await fetch(`/sessions/${threadId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.ok) {
+        itemEl.style.height   = itemEl.offsetHeight + 'px';
+        itemEl.style.overflow = 'hidden';
+        itemEl.style.transition = 'height .25s, opacity .25s, margin .25s, padding .25s';
+        requestAnimationFrame(() => {
+          itemEl.style.height  = '0';
+          itemEl.style.opacity = '0';
+          itemEl.style.margin  = '0';
+          itemEl.style.padding = '0';
+        });
+        setTimeout(() => itemEl.remove(), 280);
+        if (loadedSessionId === threadId) startNewSession();
+      }
+    } catch (err) {
+      alert(`삭제 실패: ${err.message}`);
+    }
+  }
+
+  function startNewSession() {
+    loadedSessionId = null;
+    document.getElementById('session-loaded-banner').classList.remove('active');
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    document.getElementById('input-area').style.opacity = '';
+    inputEl.placeholder = '플러그인 아이디어를 입력하세요...';
+    messagesEl.innerHTML = `
+      <div class="welcome" id="welcome">
+        <h2>아이디어를 기술 스펙으로</h2>
+        <p>플러그인이나 제품 아이디어를 입력하세요.</p>
+        <div class="examples">
+          <button class="example-btn" onclick="useExample(this)">브라우저 대화 요약 확장 프로그램</button>
+          <button class="example-btn" onclick="useExample(this)">유튜브 영상 북마크 타임스탬프 앱</button>
+          <button class="example-btn" onclick="useExample(this)">GitHub PR 코드 리뷰 자동화 봇</button>
+          <button class="example-btn" onclick="useExample(this)">Obsidian AI 태그 자동 생성 플러그인</button>
+        </div>
+      </div>`;
+    document.getElementById('result-content').innerHTML = `
+      <div id="result-placeholder">
+        <div class="icon">🏛</div>
+        <p>아이디어를 입력하면 여기에 분석 결과가 실시간으로 표시됩니다.</p>
+      </div>`;
+    pipelineBar.classList.remove('active');
+    lgReset();
+    exitReviewMode();
+    reviewMode = false; currentThreadId = null;
+    inputEl.focus();
   }
 </script>
 

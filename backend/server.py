@@ -4,12 +4,122 @@ Chae-chitect — FastAPI + SSE 백엔드 (Human-in-the-Loop Review Chat)
 
 import asyncio
 import json
+import logging
 import re
+import sqlite3
 import threading
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
+logger = logging.getLogger("chae-chitect")
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# ── 세션 스토어 ──────────────────────────────────────────────
+_SESSIONS_DB = BASE_DIR / "backend" / "data" / "sessions.db"
+_db_lock     = threading.Lock()
+
+
+def _init_db() -> None:
+    _SESSIONS_DB.parent.mkdir(parents=True, exist_ok=True)
+    with _db_lock:
+        conn = sqlite3.connect(str(_SESSIONS_DB))
+        try:
+            conn.executescript("""
+                PRAGMA foreign_keys = ON;
+                CREATE TABLE IF NOT EXISTS sessions (
+                    thread_id     TEXT PRIMARY KEY,
+                    title         TEXT NOT NULL,
+                    created_at    TEXT NOT NULL,
+                    completed_at  TEXT,
+                    status        TEXT NOT NULL DEFAULT 'running',
+                    features_json TEXT DEFAULT '[]',
+                    tech_json     TEXT DEFAULT '[]',
+                    obsidian_text TEXT DEFAULT ''
+                );
+                CREATE TABLE IF NOT EXISTS messages (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    thread_id  TEXT NOT NULL,
+                    role       TEXT NOT NULL,
+                    content    TEXT NOT NULL,
+                    msg_type   TEXT DEFAULT 'normal',
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (thread_id) REFERENCES sessions(thread_id) ON DELETE CASCADE
+                );
+            """)
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def _db(sql: str, params: tuple = (), *, fetch: str = "none"):
+    with _db_lock:
+        conn = sqlite3.connect(str(_SESSIONS_DB))
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA foreign_keys = ON")
+            cur = conn.execute(sql, params)
+            conn.commit()
+            if fetch == "one":
+                row = cur.fetchone()
+                return dict(row) if row else None
+            if fetch == "all":
+                return [dict(r) for r in cur.fetchall()]
+            return cur.rowcount
+        finally:
+            conn.close()
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _session_create(thread_id: str, title: str) -> None:
+    _db(
+        "INSERT OR IGNORE INTO sessions (thread_id, title, created_at) VALUES (?, ?, ?)",
+        (thread_id, title[:80], _now()),
+    )
+
+
+def _session_msg(thread_id: str, role: str, content: str, msg_type: str = "normal") -> None:
+    _db(
+        "INSERT INTO messages (thread_id, role, content, msg_type, created_at) VALUES (?, ?, ?, ?, ?)",
+        (thread_id, role, content, msg_type, _now()),
+    )
+
+
+def _session_save_node(thread_id: str, node_name: str, result: dict) -> None:
+    """node_done 이벤트 발생 시 각 노드 결과를 즉시 DB에 저장한다."""
+    if node_name == "decomposer":
+        features = result.get("features", [])
+        _db("UPDATE sessions SET features_json=? WHERE thread_id=?",
+            (json.dumps(features, ensure_ascii=False), thread_id))
+    elif node_name == "tech_matcher":
+        tech = result.get("tech", [])
+        _db("UPDATE sessions SET tech_json=? WHERE thread_id=?",
+            (json.dumps(tech, ensure_ascii=False), thread_id))
+    elif node_name == "obsidian_formatter":
+        obsidian = result.get("obsidian", "")
+        _db("UPDATE sessions SET obsidian_text=? WHERE thread_id=?",
+            (obsidian, thread_id))
+
+
+def _session_complete(thread_id: str, features: list, tech: list, obsidian: str) -> None:
+    _db(
+        "UPDATE sessions SET status=?, completed_at=?, features_json=?, tech_json=?, obsidian_text=? "
+        "WHERE thread_id=?",
+        (
+            "completed", _now(),
+            json.dumps(features, ensure_ascii=False),
+            json.dumps(tech, ensure_ascii=False),
+            obsidian, thread_id,
+        ),
+    )
+
+
+_init_db()
+# ────────────────────────────────────────────────────────────
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -259,6 +369,7 @@ async def stream_pipeline(message: str, thread_id: str):
     }
 
     seen_nodes: set[str] = set()   # 이미 실행된 노드 추적 (재시도 감지용)
+    final_state = None
 
     while True:
         current_node  = None   # ← 루프마다 리셋해야 재시도 node_start가 정상 발송됨
@@ -296,6 +407,7 @@ async def stream_pipeline(message: str, thread_id: str):
                     continue
                 result = build_result(node_name, data[node_name])
                 yield sse({"type": "node_done", "node": node_name, "result": result})
+                _session_save_node(thread_id, node_name, result)
                 last_done_node = node_name
 
         graph_state = architect_app.get_state(config)
@@ -323,6 +435,8 @@ async def stream_pipeline(message: str, thread_id: str):
                 "guide":   f"**{node_ko}** 결과를 검토해보세요. 수정하고 싶은 부분이 있으면 말씀해 주세요. 만족하시면 **'{next_ko} 시작'** 버튼을 눌러주세요.",
                 "opening": opening,
             })
+            if opening:
+                _session_msg(thread_id, "assistant", opening, "review_opening")
 
             await evt.wait()
             _continue_events.pop(thread_id, None)
@@ -332,7 +446,17 @@ async def stream_pipeline(message: str, thread_id: str):
             yield sse({"type": "review_end"})
             inputs = None
         else:
+            final_state = graph_state
             break
+
+    if final_state:
+        vals = final_state.values
+        _session_complete(
+            thread_id,
+            features=vals.get("feature_breakdown", []),
+            tech=vals.get("tech_requirements", []),
+            obsidian=vals.get("obsidian_template", ""),
+        )
 
     yield sse({"type": "done"})
 
@@ -349,7 +473,7 @@ class ReviewRequest(BaseModel):
 
 async def stream_review_response(thread_id: str, user_message: str):
     import logging
-    logger = logging.getLogger("review")
+
 
     try:
         config      = {"configurable": {"thread_id": thread_id}}
@@ -371,6 +495,7 @@ async def stream_review_response(thread_id: str, user_message: str):
         lc_messages.append(HumanMessage(content=user_message))
 
         history.append({"role": "user", "content": user_message})
+        _session_msg(thread_id, "user", user_message, "review")
 
         llm = ChatOpenAI(model="gpt-4o", temperature=0.3, streaming=True)
         full_response = ""
@@ -382,19 +507,22 @@ async def stream_review_response(thread_id: str, user_message: str):
 
         logger.info(f"[review] LLM responded {len(full_response)} chars")
         history.append({"role": "assistant", "content": full_response})
+        _session_msg(thread_id, "assistant", full_response, "review")
 
-        # 상태 업데이트 파싱
+        # 상태 업데이트 파싱 — 변경 즉시 DB에도 반영
         if node == "decomposer":
             updated = parse_updated_features(full_response)
             if updated:
                 architect_app.update_state(config, {"feature_breakdown": updated})
                 yield sse({"type": "state_update", "node": node, "result": {"features": updated}})
+                _session_save_node(thread_id, "decomposer", {"features": updated})
 
         elif node == "tech_matcher":
             updated = parse_updated_tech(full_response)
             if updated:
                 architect_app.update_state(config, {"tech_requirements": updated})
                 yield sse({"type": "state_update", "node": node, "result": {"tech": updated}})
+                _session_save_node(thread_id, "tech_matcher", {"tech": updated})
 
         # 진행 의도 감지
         if "<auto_proceed/>" in full_response:
@@ -415,6 +543,8 @@ async def stream_review_response(thread_id: str, user_message: str):
 @app.post("/chat")
 async def chat(req: ChatRequest):
     thread_id = str(uuid.uuid4())
+    _session_create(thread_id, req.message)
+    _session_msg(thread_id, "user", req.message)
     return StreamingResponse(
         stream_pipeline(req.message, thread_id),
         media_type="text/event-stream",
@@ -440,10 +570,170 @@ async def continue_pipeline(thread_id: str):
     return {"ok": False, "error": "대기 중인 interrupt 없음"}
 
 
+# ── 기존 세션 이어가기 ────────────────────────────────────────
+
+async def stream_session_chat(thread_id: str, message: str):
+    """완료된 세션에서 기존 결과를 컨텍스트로 LLM과 대화를 이어간다."""
+    s = _db(
+        "SELECT features_json, tech_json, obsidian_text FROM sessions WHERE thread_id = ?",
+        (thread_id,), fetch="one",
+    )
+    if not s:
+        yield sse({"type": "error", "message": "세션을 찾을 수 없습니다"})
+        yield sse({"type": "done"})
+        return
+
+    features = json.loads(s["features_json"] or "[]")
+    tech     = json.loads(s["tech_json"] or "[]")
+    obsidian = s["obsidian_text"] or ""
+
+    features_str = json.dumps(features, ensure_ascii=False, indent=2) if features else "없음"
+    tech_str     = json.dumps(tech, ensure_ascii=False, indent=2) if tech else "없음"
+
+    system_content = f"""당신은 Plugin Architect AI입니다. 완료된 프로젝트 결과를 사용자와 함께 검토하고 수정합니다.
+
+## 수정 규칙 (반드시 준수)
+- 피처를 수정/추가/삭제하면 응답 끝에 반드시 아래 태그로 **전체 목록**을 반환하세요:
+<updated_features>
+[{{"id": "F1", "name": "피처명", "description": "설명"}}]
+</updated_features>
+
+- 기술 스택을 수정/추가/삭제하면 응답 끝에 반드시 아래 태그로 **전체 목록**을 반환하세요:
+<updated_tech>
+["기술 추천 1", "기술 추천 2"]
+</updated_tech>
+
+- 변경이 없으면 태그 없이 대화만 하세요.
+- 항상 한국어로 답하세요.
+
+## 현재 피처 목록
+{features_str}
+
+## 현재 기술 스택
+{tech_str}
+
+## Obsidian 문서
+{obsidian if obsidian else "없음"}"""
+
+    # 이전 대화 기록 불러오기
+    prev_msgs = _db(
+        "SELECT role, content FROM messages WHERE thread_id = ? ORDER BY id",
+        (thread_id,), fetch="all",
+    )
+
+    lc_messages = [SystemMessage(content=system_content)]
+    for m in prev_msgs:
+        if m["role"] == "user":
+            lc_messages.append(HumanMessage(content=m["content"]))
+        else:
+            lc_messages.append(AIMessage(content=m["content"]))
+    lc_messages.append(HumanMessage(content=message))
+
+    _session_msg(thread_id, "user", message, "continue")
+
+    try:
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.4, streaming=True)
+        full_response = ""
+        async for chunk in llm.astream(lc_messages):
+            if chunk.content:
+                full_response += chunk.content
+                yield sse({"type": "token", "content": chunk.content})
+
+        _session_msg(thread_id, "assistant", full_response, "continue")
+        logger.info(f"[continue-chat] response len={len(full_response)}, snippet={full_response[:120]!r}")
+
+        # 수정된 피처/기술 스택 파싱 → DB 저장 + 프론트 패널 갱신
+        updated_features = parse_updated_features(full_response)
+        logger.info(f"[continue-chat] updated_features={'found' if updated_features else 'not found'}")
+        if updated_features:
+            _session_save_node(thread_id, "decomposer", {"features": updated_features})
+            yield sse({"type": "state_update", "node": "decomposer",
+                       "result": {"features": updated_features}})
+
+        updated_tech = parse_updated_tech(full_response)
+        logger.info(f"[continue-chat] updated_tech={'found' if updated_tech else 'not found'}")
+        if updated_tech:
+            _session_save_node(thread_id, "tech_matcher", {"tech": updated_tech})
+            yield sse({"type": "state_update", "node": "tech_matcher",
+                       "result": {"tech": updated_tech}})
+
+    except Exception as e:
+        logger.error(f"[continue-chat] 오류: {e}", exc_info=True)
+        yield sse({"type": "error", "message": str(e)})
+
+    yield sse({"type": "done"})
+
+
+@app.post("/stream/chat/{thread_id}")
+async def session_chat_endpoint(thread_id: str, req: ChatRequest):
+    return StreamingResponse(
+        stream_session_chat(thread_id, req.message),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     with open(BASE_DIR / "frontend" / "index.html", encoding="utf-8") as f:
         return f.read()
+
+
+# ── 세션 히스토리 API ─────────────────────────────────────────
+
+@app.get("/sessions")
+async def list_sessions():
+    rows = _db(
+        "SELECT thread_id, title, created_at, completed_at, status, "
+        "features_json, tech_json, obsidian_text FROM sessions ORDER BY created_at DESC",
+        fetch="all",
+    )
+    result = []
+    for r in rows:
+        result.append({
+            "thread_id":     r["thread_id"],
+            "title":         r["title"],
+            "created_at":    r["created_at"],
+            "completed_at":  r["completed_at"],
+            "status":        r["status"],
+            "feature_count": len(json.loads(r["features_json"] or "[]")),
+            "tech_count":    len(json.loads(r["tech_json"] or "[]")),
+            "has_obsidian":  bool(r["obsidian_text"]),
+        })
+    return result
+
+
+@app.get("/sessions/{thread_id}")
+async def get_session(thread_id: str):
+    from fastapi import HTTPException
+    s = _db(
+        "SELECT thread_id, title, created_at, completed_at, status, "
+        "features_json, tech_json, obsidian_text FROM sessions WHERE thread_id = ?",
+        (thread_id,), fetch="one",
+    )
+    if not s:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    msgs = _db(
+        "SELECT role, content, msg_type FROM messages WHERE thread_id = ? ORDER BY id",
+        (thread_id,), fetch="all",
+    )
+    return {
+        "thread_id":    s["thread_id"],
+        "title":        s["title"],
+        "created_at":   s["created_at"],
+        "completed_at": s["completed_at"],
+        "status":       s["status"],
+        "features":     json.loads(s["features_json"] or "[]"),
+        "tech":         json.loads(s["tech_json"] or "[]"),
+        "obsidian":     s["obsidian_text"] or "",
+        "messages":     msgs,
+    }
+
+
+@app.delete("/sessions/{thread_id}")
+async def delete_session(thread_id: str):
+    count = _db("DELETE FROM sessions WHERE thread_id = ?", (thread_id,))
+    return {"ok": bool(count)}
 
 
 if __name__ == "__main__":

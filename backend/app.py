@@ -246,7 +246,12 @@ def route_tech_matcher(state: ArchitectState) -> str:
 
 def build_architect_graph():
     """Plugin Architect 그래프를 빌드하고 컴파일한다."""
-    from langgraph.checkpoint.memory import MemorySaver
+    import sqlite3
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    DB_PATH = os.path.join(os.path.dirname(__file__), "data", "langgraph.db")
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    checkpointer = SqliteSaver(conn)
 
     graph = StateGraph(ArchitectState)
 
@@ -271,7 +276,7 @@ def build_architect_graph():
     graph.add_edge("obsidian_formatter", END)
 
     return graph.compile(
-        checkpointer=MemorySaver(),
+        checkpointer=checkpointer,
         interrupt_after=["decomposer", "tech_matcher"],
     )
 
