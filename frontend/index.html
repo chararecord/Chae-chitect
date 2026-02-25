@@ -255,6 +255,7 @@
     .msg.user .bubble       { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
     .msg.assistant .bubble  { background: var(--surface2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
     .msg.review-msg .bubble { background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.2); border-bottom-left-radius: 4px; }
+    .loading-placeholder .bubble { opacity: .85; font-style: italic; color: var(--text2); }
 
     /* Markdown */
     .bubble p  { margin-bottom: 7px; }
@@ -815,37 +816,56 @@
         </div>
       </div>
 
-      <!-- State inspector -->
+      <!-- Config / Runtime -->
       <div>
-        <div class="lg-section-title tip tip-right" data-tip="State&#10;모든 노드가 공유하는 데이터 저장소. 각 노드는 State를 읽고 처리 결과를 다시 기록합니다. Python TypedDict로 타입이 강제됩니다.">State</div>
-        <table class="lg-state-table" id="lg-state-table">
+        <div class="lg-section-title tip tip-right" data-tip="Config / Runtime&#10;graph.compile() 옵션과 런타임 실행 정보입니다. ArchitectState가 아닌 LangGraph가 관리하는 메타데이터입니다.">Config / Runtime</div>
+        <table class="lg-state-table">
           <tr>
-            <td><span class="tip tip-right" data-tip="Checkpointer&#10;각 실행 단계의 State를 스냅샷으로 저장하는 장치. MemorySaver는 메모리 저장 방식이며 Human-in-the-loop 재개에 필수입니다.">checkpointer</span></td>
-            <td>MemorySaver</td>
+            <td><span class="tip tip-right" data-tip="checkpointer&#10;각 실행 단계의 State를 스냅샷으로 저장. SqliteSaver는 DB에 영구 저장해 서버 재시작 후에도 재개 가능합니다.">checkpointer</span></td>
+            <td><span style="font-family:var(--font-mono);font-size:9.5px">SqliteSaver</span></td>
           </tr>
           <tr>
-            <td><span class="tip tip-right" data-tip="interrupt_after&#10;지정한 노드 실행 직후 그래프를 일시 중단합니다. 사람이 결과를 검토·수정하고 resume할 때까지 State가 유지됩니다.">interrupt_after</span></td>
+            <td><span class="tip tip-right" data-tip="interrupt_after&#10;지정한 노드 실행 직후 그래프를 일시 중단합니다. 사람이 검토·수정 후 재개할 때까지 State가 유지됩니다.">interrupt_after</span></td>
             <td><span style="color:var(--review);font-family:var(--font-mono);font-size:9.5px">["decomposer","tech_matcher"]</span></td>
           </tr>
           <tr>
-            <td><span class="tip tip-right" data-tip="thread_id&#10;하나의 대화 흐름을 식별하는 고유 ID. 같은 thread_id로 재요청하면 Checkpointer가 이전 State를 불러와 대화를 이어갑니다.">thread_id</span></td>
+            <td><span class="tip tip-right" data-tip="thread_id&#10;대화 흐름을 식별하는 고유 ID. 같은 thread_id로 재요청하면 Checkpointer가 이전 State를 불러옵니다.">thread_id</span></td>
             <td id="st-thread">—</td>
           </tr>
           <tr>
-            <td><span class="tip tip-right" data-tip="current_node&#10;현재 실행 중이거나 마지막으로 완료된 노드 이름. 그래프가 어느 단계에 있는지 실시간으로 표시합니다.">current_node</span></td>
+            <td><span class="tip tip-right" data-tip="current_node&#10;현재 실행 중이거나 마지막으로 완료된 노드 이름입니다.">current_node</span></td>
             <td id="st-node" class="lg-state-val">—</td>
           </tr>
+        </table>
+      </div>
+
+      <!-- ArchitectState (TypedDict) -->
+      <div>
+        <div class="lg-section-title tip tip-right" data-tip="ArchitectState&#10;모든 노드가 공유하는 데이터. Python TypedDict로 타입이 강제되며, 각 노드는 State를 읽고 처리 결과를 기록합니다.">ArchitectState</div>
+        <table class="lg-state-table" id="lg-state-table">
           <tr>
-            <td><span class="tip tip-right" data-tip="features&#10;decomposer 노드가 State의 feature_breakdown 필드에 저장한 피처 개수입니다.">features</span></td>
+            <td><span class="tip tip-right" data-tip="messages&#10;HumanMessage·AIMessage 대화 히스토리. add_messages Reducer로 append됩니다.">messages</span></td>
+            <td id="st-messages" class="lg-state-val">0개</td>
+          </tr>
+          <tr>
+            <td><span class="tip tip-right" data-tip="feature_breakdown&#10;decomposer 노드가 저장하는 Atomic Feature 목록입니다.">feature_breakdown</span></td>
             <td id="st-features" class="lg-state-val">0개</td>
           </tr>
           <tr>
-            <td><span class="tip tip-right" data-tip="tech_stack&#10;tech_matcher 노드가 State의 tech_requirements 필드에 저장한 기술 추천 항목 수입니다.">tech_stack</span></td>
+            <td><span class="tip tip-right" data-tip="tech_requirements&#10;tech_matcher 노드가 저장하는 기술 추천 목록입니다.">tech_requirements</span></td>
             <td id="st-tech" class="lg-state-val">0개</td>
           </tr>
           <tr>
-            <td><span class="tip tip-right" data-tip="obsidian&#10;obsidian_formatter 노드가 생성한 최종 마크다운 문서의 존재 여부. 완료되면 ✅로 표시됩니다.">obsidian</span></td>
+            <td><span class="tip tip-right" data-tip="obsidian_template&#10;obsidian_formatter 노드가 생성하는 최종 마크다운 문서입니다.">obsidian_template</span></td>
             <td id="st-obsidian" class="lg-state-val">—</td>
+          </tr>
+          <tr>
+            <td><span class="tip tip-right" data-tip="decomposer_retries&#10;decomposer 노드의 총 실행 횟수. 품질 미달 시 루프백 재시도합니다.">decomposer_retries</span></td>
+            <td id="st-decomp-retries" class="lg-state-val">—</td>
+          </tr>
+          <tr>
+            <td><span class="tip tip-right" data-tip="tech_retries&#10;tech_matcher 노드의 총 실행 횟수. 품질 미달 시 루프백 재시도합니다.">tech_retries</span></td>
+            <td id="st-tech-retries" class="lg-state-val">—</td>
           </tr>
         </table>
       </div>
@@ -1106,9 +1126,7 @@
       const res  = await fetch(`/continue/${currentThreadId}`, { method: 'POST' });
       const data = await res.json();
       if (!data.ok) {
-        addSystemNotice('⚠️ 파이프라인 상태가 만료됐습니다. 새 대화를 시작하거나 대화로 결과를 수정하세요.', 'retry');
-        exitReviewMode();
-        currentThreadId = null;
+        await subscribeToResume(currentThreadId);
       }
     } catch (e) {
       addSystemNotice('⚠️ 연결 오류가 발생했습니다.', 'retry');
@@ -1117,12 +1135,49 @@
     }
   }
 
+  async function subscribeToResume(threadId) {
+    exitReviewMode();
+    addSystemNotice('🔄 체크포인트에서 파이프라인을 재개합니다...');
+    try {
+      const res = await fetch(`/stream/resume/${threadId}`);
+      if (!res.ok) {
+        addSystemNotice('⚠️ 재개 실패: 서버 오류', 'retry');
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let raw = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        raw += decoder.decode(value, { stream: true });
+        const lines = raw.split('\n'); raw = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let ev;
+          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+          if (ev.type === 'error') {
+            addSystemNotice('⚠️ ' + (ev.message || '재개 실패'), 'retry');
+            break;
+          }
+          handlePipelineEvent(ev);
+        }
+      }
+    } catch (err) {
+      addSystemNotice('⚠️ 재개 실패: ' + (err && err.message ? err.message : String(err)), 'retry');
+    }
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = '✅ 확정하고 다음 단계로';
+  }
+
   // ── 리뷰 메시지 전송 ────────────────────────
   let reviewBubble = null;
 
   async function sendReviewMessage(text) {
     addUserBubble(text);
     reviewBubble = createBubble('review-msg');
+    reviewBubble.textContent = '생각 중...';
+    reviewBubble.classList.add('loading-placeholder');
     sendBtn.disabled = true;
     let buf = '';
 
@@ -1147,6 +1202,7 @@
 
           if (ev.type === 'token') {
             buf += ev.content;
+            reviewBubble.classList.remove('loading-placeholder');
             reviewBubble.innerHTML = renderMarkdown(buf);
             scrollChat();
           } else if (ev.type === 'error') {
@@ -1173,6 +1229,8 @@
   }
 
   // ── 메인 전송 ────────────────────────────────
+  let loadingBubbleEl = null;
+
   async function sendMessage() {
     const text = inputEl.value.trim();
     if (!text || sendBtn.disabled) return;
@@ -1195,6 +1253,14 @@
 
     sendBtn.disabled = true;
     addUserBubble(text);
+    loadingBubbleEl = (function() {
+      const wrap = document.createElement('div');
+      wrap.className = 'msg assistant loading-placeholder';
+      wrap.innerHTML = '<div class="bubble">생각 중...</div>';
+      messagesEl.appendChild(wrap);
+      scrollChat();
+      return wrap;
+    })();
 
     try {
       const res = await fetch('/chat', {
@@ -1216,6 +1282,8 @@
       }
     } catch (err) {
       addSystemNotice(`오류: ${err}`);
+      loadingBubbleEl?.remove();
+      loadingBubbleEl = null;
     }
 
     sendBtn.disabled = false;
@@ -1226,6 +1294,8 @@
     sendBtn.disabled = true;
     addUserBubble(text);
     const bubble = createBubble('assistant');
+    bubble.textContent = '생각 중...';
+    bubble.classList.add('loading-placeholder');
 
     try {
       const res = await fetch(`/stream/chat/${loadedSessionId}`, {
@@ -1245,6 +1315,7 @@
           const evt = JSON.parse(line.slice(6));
           if (evt.type === 'token') {
             fullText += evt.content;
+            bubble.classList.remove('loading-placeholder');
             bubble.innerHTML = renderMarkdown(fullText);
             messagesEl.scrollTop = messagesEl.scrollHeight;
           } else if (evt.type === 'state_update') {
@@ -1261,16 +1332,24 @@
       }
     } catch (err) {
       addSystemNotice(`오류: ${err}`);
+      bubble.classList.remove('loading-placeholder');
+      if (!fullText) bubble.textContent = '응답을 불러오지 못했습니다.';
     }
+    sendBtn.disabled = false;
+    inputEl.focus();
   }
 
   // ── LangGraph 패널 ───────────────────────────
   const lgLog      = document.getElementById('lg-log');
-  const stThread   = document.getElementById('st-thread');
-  const stNode     = document.getElementById('st-node');
-  const stFeatures = document.getElementById('st-features');
-  const stTech     = document.getElementById('st-tech');
-  const stObsidian = document.getElementById('st-obsidian');
+  const stThread        = document.getElementById('st-thread');
+  const stNode          = document.getElementById('st-node');
+  const stMessages      = document.getElementById('st-messages');
+  const stFeatures      = document.getElementById('st-features');
+  const stTech          = document.getElementById('st-tech');
+  const stObsidian      = document.getElementById('st-obsidian');
+  const stDecompRetries = document.getElementById('st-decomp-retries');
+  const stTechRetries   = document.getElementById('st-tech-retries');
+  let lgMsgCount = 0;
 
   const EDGE_PAIRS = [
     ['start', 'decomposer'],
@@ -1337,7 +1416,15 @@
     if (s) { s.className = 'lg-terminal active'; }
     if (e) { e.className = 'lg-terminal'; }
     stThread.textContent = '—'; stNode.textContent = '—';
+    lgMsgCount = 0; if (stMessages) stMessages.textContent = '0개';
     stFeatures.textContent = '0개'; stTech.textContent = '0개'; stObsidian.textContent = '—';
+    if (stDecompRetries) stDecompRetries.textContent = '—'; if (stTechRetries) stTechRetries.textContent = '—';
+    lgLog.innerHTML = '';
+    const idleEntry = document.createElement('div');
+    idleEntry.className = 'lg-log-entry';
+    idleEntry.style.opacity = '.4';
+    idleEntry.innerHTML = '<span class="lg-log-type start">idle</span><span class="lg-log-msg">파이프라인 대기 중</span>';
+    lgLog.appendChild(idleEntry);
   }
 
   // ── 파이프라인 이벤트 핸들러 ─────────────────
@@ -1345,12 +1432,14 @@
 
   function handlePipelineEvent(ev) {
     if (ev.type === 'start') {
+      if (loadingBubbleEl) { loadingBubbleEl.remove(); loadingBubbleEl = null; }
       currentThreadId = ev.thread_id;
       initStepper(ev.nodes, ev.node_ko);
       initResultPanel(ev.nodes, ev.node_ko);
       lgReset();
       lgLog.innerHTML = '';
       stThread.textContent = ev.thread_id.slice(0, 8) + '…';
+      lgMsgCount = 1; if (stMessages) stMessages.textContent = '1개';
       lgAddLog('start', `파이프라인 시작 · ${ev.nodes.length}개 노드`);
       // S: 실행 시작됐으니 done으로
       const lgS = document.getElementById('lg-start');
@@ -1382,6 +1471,10 @@
       renderSectionResult(ev.node, ev.result);
       lgSetNodeStatus(ev.node, 'done');
       lgUpdateNodeMeta(ev.node, ev.result);
+      lgMsgCount += 1; if (stMessages) stMessages.textContent = lgMsgCount + '개';
+      const rawRetries = ev.result?.retries ?? 1;
+      if (ev.node === 'decomposer' && stDecompRetries) stDecompRetries.textContent = rawRetries + '회';
+      if (ev.node === 'tech_matcher' && stTechRetries) stTechRetries.textContent = rawRetries + '회';
       // 재시도 횟수 노드에 표시
       const retries = (ev.result?.retries ?? 1) - 1;
       if (retries > 0) {
@@ -1424,6 +1517,10 @@
       }
       exitReviewMode();
 
+    } else if (ev.type === 'closing') {
+      const bubble = createBubble('assistant');
+      bubble.innerHTML = renderMarkdown(ev.message || '모든 단계가 완료됐어요!');
+      scrollChat();
     } else if (ev.type === 'done') {
       exitReviewMode();
       stNode.textContent = 'END';
@@ -1589,6 +1686,10 @@
         : (s.tech && s.tech.length)          ? 'obsidian_formatter'
         : (s.features && s.features.length)  ? 'tech_matcher'
         : '—';
+      lgMsgCount = (s.messages && s.messages.length) || 0;
+      if (stMessages) stMessages.textContent = lgMsgCount + '개';
+      if (stDecompRetries && s.features && s.features.length) stDecompRetries.textContent = '1회 이상';
+      if (stTechRetries && s.tech && s.tech.length) stTechRetries.textContent = '1회 이상';
 
       // 메시지 복원
       s.messages.forEach(m => {

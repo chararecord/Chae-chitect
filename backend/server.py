@@ -462,6 +462,12 @@ async def stream_pipeline(message: str, thread_id: str):
             tech=vals.get("tech_requirements", []),
             obsidian=vals.get("obsidian_template", ""),
         )
+        closing = (
+            "모든 단계가 완료됐어요! **Obsidian 문서**가 왼쪽 패널에 준비됐습니다. "
+            "복사 버튼으로 붙여넣어 사용하시면 됩니다. 추가로 수정이 필요하면 말씀해 주세요."
+        )
+        yield sse({"type": "closing", "message": closing})
+        _session_msg(thread_id, "assistant", closing, "normal")
 
     yield sse({"type": "done"})
 
@@ -573,6 +579,123 @@ async def continue_pipeline(thread_id: str):
         evt.set()
         return {"ok": True}
     return {"ok": False, "error": "대기 중인 interrupt 없음"}
+
+
+# ── 체크포인트 재개 (SqliteSaver) ─────────────────────────────
+
+async def stream_resume(thread_id: str):
+    """SqliteSaver 체크포인트에서 중단된 파이프라인을 재개한다."""
+    config = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        graph_state = architect_app.get_state(config)
+    except Exception as e:
+        yield sse({"type": "error", "message": f"체크포인트를 찾을 수 없습니다: {e}"})
+        yield sse({"type": "done"})
+        return
+
+    if not graph_state or not graph_state.next:
+        yield sse({"type": "error", "message": "재개할 interrupt 지점이 없습니다. 새 대화를 시작해 주세요."})
+        yield sse({"type": "done"})
+        return
+
+    seen_nodes = set()
+    inputs = None
+
+    while True:
+        current_node = None
+        last_done_node = None
+
+        async for chunk in iter_graph_async(inputs, config):
+            mode, data = chunk
+
+            if mode == "messages":
+                token_msg, metadata = data
+                node = metadata.get("langgraph_node", "")
+                if node not in NODES:
+                    continue
+                if node != current_node:
+                    current_node = node
+                    is_retry = node in seen_nodes
+                    if is_retry:
+                        try:
+                            cur_state = architect_app.get_state(config)
+                            reason = _quality_fail_reason(node, cur_state.values)
+                        except Exception:
+                            reason = "품질 기준 미달"
+                        yield sse({"type": "node_start", "node": node, "retry": True, "reason": reason})
+                    else:
+                        yield sse({"type": "node_start", "node": node, "retry": False})
+                    seen_nodes.add(node)
+                if isinstance(token_msg, AIMessageChunk) and token_msg.content:
+                    yield sse({"type": "token", "node": node, "content": token_msg.content})
+
+            elif mode == "updates":
+                node_name = next(iter(data))
+                if node_name not in NODES:
+                    continue
+                result = build_result(node_name, data[node_name])
+                yield sse({"type": "node_done", "node": node_name, "result": result})
+                _session_save_node(thread_id, node_name, result)
+                last_done_node = node_name
+
+        graph_state = architect_app.get_state(config)
+
+        if graph_state.next:
+            _review_node[thread_id] = last_done_node
+            _review_history[thread_id] = []
+
+            evt = asyncio.Event()
+            _continue_events[thread_id] = evt
+
+            node_ko = NODE_KO.get(last_done_node, last_done_node)
+            next_node = list(graph_state.next)[0]
+            next_ko = NODE_KO.get(next_node, "")
+            opening = _build_opening_message(last_done_node, graph_state.values)
+
+            yield sse({
+                "type": "review_start",
+                "node": last_done_node,
+                "next": next_node,
+                "guide": f"**{node_ko}** 결과를 검토해보세요. 수정하고 싶은 부분이 있으면 말씀해 주세요. 만족하시면 **'{next_ko} 시작'** 버튼을 눌러주세요.",
+                "opening": opening,
+            })
+            if opening:
+                _session_msg(thread_id, "assistant", opening, "review_opening")
+
+            await evt.wait()
+            _continue_events.pop(thread_id, None)
+            _review_history.pop(thread_id, None)
+            _review_node.pop(thread_id, None)
+
+            yield sse({"type": "review_end"})
+            inputs = None
+        else:
+            vals = graph_state.values
+            _session_complete(
+                thread_id,
+                features=vals.get("feature_breakdown", []),
+                tech=vals.get("tech_requirements", []),
+                obsidian=vals.get("obsidian_template", ""),
+            )
+            closing = (
+                "모든 단계가 완료됐어요! **Obsidian 문서**가 왼쪽 패널에 준비됐습니다. "
+                "복사 버튼으로 붙여넣어 사용하시면 됩니다. 추가로 수정이 필요하면 말씀해 주세요."
+            )
+            yield sse({"type": "closing", "message": closing})
+            _session_msg(thread_id, "assistant", closing, "normal")
+            break
+
+    yield sse({"type": "done"})
+
+
+@app.get("/stream/resume/{thread_id}")
+async def resume_endpoint(thread_id: str):
+    return StreamingResponse(
+        stream_resume(thread_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── 기존 세션 이어가기 ────────────────────────────────────────
